@@ -1,0 +1,8 @@
+matplotlib
+scipy
+autograd
+numpy
+appdirs
+lz4
+importlib_resources
+aiohttp

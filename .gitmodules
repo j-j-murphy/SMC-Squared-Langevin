@@ -1,3 +1,3 @@
-[submodule "public_SMC2/Parallel_SMC_squared/SMC_Squared/fixed_size_redistribution"]
-	path = public_SMC2/Parallel_SMC_squared/SMC_Squared/fixed_size_redistribution
-	url = https://github.com/AVarsi88/O_logN_parallel_redistribution/tree/1023a8f25bb8791bd56e553b3625feea34aaf79c
+[submodule "SMC_Squared/fixed_size_redistribution"]
+	path = SMC_Squared/fixed_size_redistribution
+	url = https://github.com/AVarsi88/O_logN_parallel_redistribution.git

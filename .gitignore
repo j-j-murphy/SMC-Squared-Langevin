@@ -1,0 +1,5 @@
+*.png
+SMC_Squared/__pycache__
+SMC_Squared/outputs
+SMC_Squared/logs
+SMC_Squared/plotting
