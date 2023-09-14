@@ -11,7 +11,7 @@
 #SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p bighyp
+#SBATCH -p nodes
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=32
 #SBATCH -J SIR_test
