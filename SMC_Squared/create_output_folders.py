@@ -17,16 +17,16 @@ seeds = range(0,10)
 #     output_dir = Path.joinpath(SMCS_OUTPUT_DIR, f"{model}_{l_kernel}", f"particles_{particle}", f"cores_{core}", f"seed_{seed}")
 #     output_dir.mkdir(parents=True, exist_ok=True)
 
-pmcmc_model = ["test_SEIR_pmcmc"]
+pmcmc_model = ["SIR_pmcmc"]
 problem_size = np.array([256, 512, 1024, 2048])*10
 
 hyperparams_pmcmc = [pmcmc_model, problem_size, seeds]
 combinations_pmcmc = list(itertools.product(*hyperparams_pmcmc))
 
-# for combo in combinations_pmcmc:
-#     model, size, seed = combo
-#     output_dir = Path.joinpath(SMCS_OUTPUT_DIR, f"{model}", f"size_{size}", f"seed_{seed}")
-#     output_dir.mkdir(parents=True, exist_ok=True)
+for combo in combinations_pmcmc:
+    model, size, seed = combo
+    output_dir = Path.joinpath(SMCS_OUTPUT_DIR, f"{model}", f"size_{size}", f"seed_{seed}")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
 models = ["SIR_gauss"]
 particles = [1024]

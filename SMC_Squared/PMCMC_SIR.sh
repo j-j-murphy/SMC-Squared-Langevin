@@ -11,10 +11,10 @@
 #SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p nodes
+#SBATCH -p bighyp
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH -J PMCMC_SIR
+#SBATCH -J PMCMC_SIR_new
 
 #SBATCH -c 1
 # This asks for 10 minutes of time.

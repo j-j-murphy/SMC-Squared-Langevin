@@ -65,12 +65,13 @@ def simulate_data_SIR(N, t_length, beta, gamma, I_initial):
 
 class Target_PF():
    
-    def __init__(self, obs):
+    def __init__(self, obs, prior):
         self.obs = obs
+        self.prior = prior
    
     """ Define target """
     def logpdf(self, x, rngs_pf):
-        return(self.run_particleFilter(x, rngs_pf))
+        return(self.run_particleFilter(x, rngs_pf)+self.prior.logpdf(x))
    
     def log_jacobian_transform(self, x):
         return x[0]+x[1]
@@ -203,9 +204,9 @@ for optL in optLs:
         for seed in seeds:
 
             N = samples
-            p = Target_PF(obs_list[seed])
             q0 = Q0()
             q = Q()
+            p = Target_PF(obs_list[seed], q0)
             diagnose = smc_diagnostics(num_particles=N, num_cores=MPI.COMM_WORLD.Get_size(), seed=seed, l_kernel=optL, model="SIR")
             smc = SMC(N, D, p, q0, K, proposal=q, optL=optL, seed=seed, rc_scheme='ESS_Recycling', diagnose=diagnose) # forwards-proposal, gauss
 

@@ -61,12 +61,13 @@ def simulate_data_SIR(N, t_length, beta, gamma, I_initial):
 
 class Target_PF():
    
-    def __init__(self, obs):
+    def __init__(self, obs, prior):
         self.obs = obs
+        self.prior = prior
    
     """ Define target """
     def logpdf(self, x, rngs_pf):
-        return(self.run_particleFilter(x, rngs_pf))
+        return(self.run_particleFilter(x, rngs_pf)+self.prior.logpdf(x))
    
     def run_particleFilter(self, thetas, rngs):
        
@@ -166,7 +167,7 @@ class Q0(Q0_Base):
 
 
 seed = 1
-problem_size = np.array([256, 512, 1024, 2048])*10
+problem_size = np.array([1024])*10
 K= 2
 seeds=range(0,10)
 
@@ -192,9 +193,9 @@ for M in problem_size:
     for seed in seeds:
         print("run")
         t0 = time.time()
-        p = Target_PF(obs_list[seed])
         q0 = Q0()
         q = Q()
+        p = Target_PF(obs_list[seed], q0)
         rng = RNG(seed)
         samples = np.zeros([M, K])
         samples_proposed = np.zeros([M, K])
