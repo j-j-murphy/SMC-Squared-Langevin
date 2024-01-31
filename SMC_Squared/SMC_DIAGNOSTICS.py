@@ -22,7 +22,7 @@ class smc_diagnostics_final_output_only(smc_no_diagnostics):
         self.fpath = Path(f"outputs/{model}_{l_kernel}",f"particles_{num_particles}",f"cores_{num_cores}",f"seed_{int(seed)}")
 
     def make_run_folder(self):
-        os.mkdir(self.fpath)
+        self.fpath.mkdir(parents=True, exist_ok=True)
 
     def save_final_info(self, mean, mean_rc, var, var_rc, Neff, resampling_points, N, runtime_iterations):
         #

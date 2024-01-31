@@ -12,9 +12,9 @@
 
 # Request the partition
 #SBATCH -p bighyp
-#SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=1
-#SBATCH -J PMCMC_SIR_new
+#SBATCH --ntasks=32
+#SBATCH --ntasks-per-node=32
+#SBATCH -J SIR_new
 
 #SBATCH -c 1
 # This asks for 10 minutes of time.
@@ -84,7 +84,7 @@ echo "Running parallel job:"
 # If you use all of the slots specified in the -pe line above, you do not need
 # to specify how many MPI processes to use - that is the default
 # the ret flag is the return code, so you can spot easily if your code failed.
-python pmcmc_SIR.py
+mpiexec -n $SLURM_NTASKS python lgssm_gradients.py
 
 ret=$?
 

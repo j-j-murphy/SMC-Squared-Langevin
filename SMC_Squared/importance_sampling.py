@@ -73,7 +73,7 @@ def ess(wn):
     return 1 / glob_sum
 
 
-def resample(x, p_logpdf_x, wn, N, rng):
+def resample(x, p_logpdf_x, wn, N, rng, grads, grads_1):
     """
     Description
     -----------
@@ -105,9 +105,11 @@ def resample(x, p_logpdf_x, wn, N, rng):
 
     # New samples
     x_new = x[i_new]
+    grads_new = grads[i_new]
+    grads_new_1 = grads_1[i_new]
     p_logpdf_x_new = p_logpdf_x[i_new]
 
-    return x_new, p_logpdf_x_new, wn_new
+    return x_new, p_logpdf_x_new, wn_new, grads_new, grads_new_1
     
     
 def weighted_mean(x, wn):

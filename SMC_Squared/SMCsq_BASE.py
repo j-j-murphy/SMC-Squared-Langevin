@@ -48,7 +48,7 @@ class SMC():
     P.L.Green and L.J. Devlin
     """
 
-    def __init__(self, N, D, p, q0, K, proposal, optL, seed, 
+    def __init__(self, N, D, p, q0, K, proposal, optL, seed, prop, 
                  rc_scheme=None, verbose=False, diagnose=None):
 
         # Assign variables to self
@@ -60,6 +60,7 @@ class SMC():
         self.K = K
         self.optL = optL
         self.seed = seed
+        self.prop = prop
         self.verbose = verbose
         self.rank = MPI.COMM_WORLD.Get_rank()
 
@@ -126,35 +127,25 @@ class SMC():
 
         # Sample from prior and find initial evaluations of the
         # target and the prior. Note that, be default, we keep
-        # the log weights vertically stacked.
-        #x = np.zeros([self.N, self.D])
-        #for i in range(self.N):
-        #    x[i][0] = rngs[i]
-        #x = np.vstack(self.q0.rvs(size=self.N)).T
-        
-        for ii in range(self.loc_n):
-            
+        # the log weights vertically stacked.        
+        for ii in range(self.loc_n):        
             x[ii] = self.q0.rvs(1, rngs[ii])
             
-        
-
         p_logpdf_x =np.zeros(self.loc_n)
+        p_logpdf_x_grads =np.zeros(self.loc_n)
+        p_logpdf_x_grads_2 =np.zeros(self.loc_n)
         p_log_q0_x =np.zeros(self.loc_n)
         
- 
         for ii in range(self.loc_n):
-            p_logpdf_x[ii] = self.p.logpdf(x[ii], rngs[ii])
+            p_logpdf_x[ii], p_logpdf_x_grads[ii], p_logpdf_x_grads_2[ii] = self.p.logpdf(x[ii], self.K)
             p_log_q0_x[ii] = self.q0.logpdf(x[ii])
-        
         p_logpdf_x  = np.vstack(p_logpdf_x)
         p_log_q0_x = np.vstack(p_log_q0_x)
-        
         
         #log = np.zeros(self.loc_n)
         # Find log-weights of prior samples
         logw = p_logpdf_x - p_log_q0_x    
         
-
         # Main sampling loop
         for self.k in range(self.K):
 
@@ -162,7 +153,6 @@ class SMC():
                 print('\nIteration :', self.k)
 
             # Find normalised weights and realise estimates
-            
             wn = np.exp(normalise(logw))
             
             #print(x)
@@ -179,46 +169,36 @@ class SMC():
                                                                          self.var_estimate)
 
 
-            
             # Record effective sample size at kth iteration
             self.Neff[self.k] = IS.ess(wn)
-            
 
             # Resample if effective sample size is below threshold
             if self.Neff[self.k] < self.N/2:
-
                 self.resampling_points = np.append(self.resampling_points,
-                                                   self.k)
-                
-                #x, p_logpdf_x, wn = IS.resample(x, p_logpdf_x, wn, self.N, mvrs_rng)
-               
-                									   
-                x, p_logpdf_x, wn = systematic_resampling(x, p_logpdf_x, wn, self.N, mvrs_rng)
+                                                   self.k)								   
+                x, p_logpdf_x, wn, p_logpdf_x_grads, p_logpdf_x_grads_2 = systematic_resampling(x, p_logpdf_x, wn, self.N, mvrs_rng, p_logpdf_x_grads, p_logpdf_x_grads_2)
                 logw = np.log(wn)
                 
-
-        
             # Propose new samples
             for i in range(self.loc_n):
-                x_new[i] = self.q.rvs(x_cond=x[i], rngs=rngs[i])
-	
-            
+                x_new[i] = self.q.rvs(x_cond=x[i], rngs=rngs[i], grads=p_logpdf_x_grads[i], grads_1=p_logpdf_x_grads_2[i], props=self.prop)
+	        
             # Make sure evaluations of likelihood are vectorised
             p_logpdf_x_new =np.zeros(self.loc_n)
+            p_logpdf_x_grads_new = np.zeros((self.loc_n, self.D))
+            p_logpdf_x_grads_new_1 = np.zeros((self.loc_n, self.D))
             
             for ii in range(self.loc_n):
-                p_logpdf_x_new[ii] = self.p.logpdf(x_new[ii], rngs[ii])
-            #p_logpdf_x_new = np.zeros(self.loc_n)
+                p_logpdf_x_new[ii], p_logpdf_x_grads_new[ii], p_logpdf_x_grads_new_1[ii] = self.p.logpdf(x_new[ii], self.K)
            
             p_logpdf_x_new  = np.vstack(p_logpdf_x_new)
-            #print(p_logpdf_x_new)
+            p_logpdf_x_grads_new  = np.vstack(p_logpdf_x_grads_new)
+            p_logpdf_x_grads_new_1  = np.vstack(p_logpdf_x_grads_new_1)
 
             # Update log weights
             logw_new = self.update_weights(x, x_new, logw, p_logpdf_x,
                                            p_logpdf_x_new)
                                            
-                                           
-
             # Make sure that, if p.logpdf(x_new) is -inf, then logw_new
             # will also be -inf. Otherwise it is returned as NaN.
             for i in range(self.loc_n):
@@ -231,7 +211,8 @@ class SMC():
             x = np.copy(x_new)
             logw = np.copy(logw_new)
             p_logpdf_x = np.copy(p_logpdf_x_new)
-
+            p_logpdf_x_grads = np.copy(p_logpdf_x_grads_new)
+            p_logpdf_x_grads_2 = np.copy(p_logpdf_x_grads_new_1)
             self.runtimes[self.k] = MPI.Wtime() - start
 
         # Final quantities to be assigned to self
@@ -243,17 +224,6 @@ class SMC():
                                         self.Neff, self.resampling_points, self.N,
                                         self.runtimes)
     
-        # Constrain estimates if using Stan model
-        #if isinstance(self.p, StanModel):
-        #    (self.constrained_mean_estimate,
-        #     self.transformed_mean_estimate) = self.p.constrain_mean(self.mean_estimate)
-        #    (self.constrained_var_estimate,
-        #    self.transformed_var_estimate) = self.p.constrain_var(self.var_estimate)
-        #    if self.rc:
-        #        (self.constrained_mean_estimate_rc,
-        #        self.transformed_mean_estimate_rc) = self.p.constrain_mean(self.mean_estimate_rc)
-        #        (self.constrained_var_estimate_rc,
-        #        self.transformed_var_estimate_rc) = self.p.constrain_var(self.var_estimate_rc)
 
     def update_weights(self, x, x_new, logw, p_logpdf_x,
                        p_logpdf_x_new):

@@ -19,19 +19,30 @@ def get_number_of_copies(wn, rng):
     return ncopies.astype('int32')
 
 
-def systematic_resampling(x, p_logpdf_x, wn, N, rng):
+def systematic_resampling(x, p_logpdf_x, wn, N, rng, grads, grads_1):
     np.random.seed(42)
     comm = MPI.COMM_WORLD
     P = comm.Get_size()
     loc_n = int(N / P)
-
+    dim = x.shape[1]
+    #need to flatten grads_1(hessian)
+    
+    grads = grads.reshape(-1, 1)
+    grads_1 = grads_1.reshape(-1, 1)
+    x = np.concatenate((x, grads, grads_1), axis=1)
+    
     ncopies = get_number_of_copies(wn, rng)
-
     p_logpdf_x_shape = p_logpdf_x.shape
     x = np.hstack((x, np.reshape(p_logpdf_x, newshape=(len(p_logpdf_x), 1))))
     x = redistribute(x, ncopies)
+    
+    #unpack x, grads, hessian
+    x = x[:, 0:x.shape[1]]
+    grads_new = x[:, dim:(2*dim)].reshape(len(grads),)
+    grads_new_1 = x[:, (2*dim):(2*dim+dim**2)].reshape(len(grads_new),)
+
     wn_new = np.ones(loc_n) / N
-    x_new = x[:, 0:-1]
+    x_new = x[:, 0:dim]
     p_logpdf_x_new = np.reshape(x[:, -1], newshape=p_logpdf_x_shape)
 
-    return x_new, p_logpdf_x_new, wn_new
+    return x_new, p_logpdf_x_new, wn_new, grads_new, grads_new_1
