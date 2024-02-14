@@ -7,6 +7,7 @@ from mpi4py import MPI
 
 from scipy.stats import multivariate_normal as Normal_PDF
 from scipy.stats import gamma as Gamma_PDF
+from scipy.stats import uniform as Uniform_PDF
 from scipy.stats import gamma, norm
 from scipy.stats import binom
 from scipy.stats import poisson
@@ -16,12 +17,13 @@ import autograd
 import torch
 from torch.autograd import Variable
 from torch.autograd import grad
+from torch.autograd.functional import hessian
 
 from SMCsq_BASE import SMC
 from SMC_TEMPLATES import Target_Base, Q0_Base, Q_Base
 from SMC_DIAGNOSTICS import smc_no_diagnostics, smc_diagnostics_final_output_only, smc_diagnostics
 
-
+torch.manual_seed(42)
 def generateData(theta, noObservations, initialState):
     mu = theta[0]
     phi = theta[1]
@@ -56,51 +58,76 @@ class Target_PF():
     
     """ Define target """
     def logpdf(self, thetas, rngs):
-        mu_ = Variable(torch.tensor(thetas[0]),requires_grad=True)
+        thetas_ = torch.tensor(thetas, requires_grad=True)
+        print("thetas", thetas_)
+
+        ######
         try:
-
-            first_derivative = grad(self.run_particleFilter(mu_, rngs), mu_, create_graph=True)[0]
+            first_derivative = grad(self.run_particleFilter(thetas_, rngs), thetas_, create_graph=True)[0]
+            print("1st deriv",first_derivative)
             # We now have dloss/dx
-            second_derivative = grad(first_derivative, mu_)[0]
 
-            #thetas_ = torch.tensor([mu_])
-            LL = self.run_particleFilter(mu_, rngs)
-            #LL.backward()
-            #grad_beta  = mu_.grad
-                
-            grad_prior_mu_first = grad(torch.distributions.Normal(0, 1).log_prob(mu_), mu_, create_graph=True)[0]
-            grad_prior_mu_second = grad(grad_prior_mu_first, mu_)[0]
-            #print(grad(torch.distributions.Gamma(1, 1).log_prob(mu_), mu_, create_graph=True)[0].detach().numpy())
-                
-            first_derivative  = first_derivative.detach().numpy() + grad_prior_mu_first.detach().numpy()
-            second_derivative = second_derivative.detach().numpy() + grad_prior_mu_second.detach().numpy()
-            test = np.array([first_derivative])
-            test1 = np.array([[second_derivative]])
+            second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
+            second_derivative = np.stack(second_derivative)
+            print("2nd deriv", second_derivative)
+            LL = self.run_particleFilter(thetas_, rngs)
+
+
+            #grad_prior_mu_first = grad(torch.distributions.Normal(0, 1).log_prob(mu_), mu_, create_graph=True)[0]
+            #grad_prior_mu_second = grad(grad_prior_mu_first, mu_)[0]
+
+            first_derivative  = first_derivative.detach().numpy() #+ grad_prior_mu_first.detach().numpy()
+            second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
+            # print("is nan first", np.any(np.isnan(first_derivative)))
+            # print("second", np.any(np.isnan(second_derivative)))
+            # print("LL" , np.isnan(LL))
+            test = first_derivative
+            test1 = second_derivative
             LL_=LL.detach().numpy()
+            if np.any(np.isnan(first_derivative)) or np.any(np.isnan(second_derivative)) or torch.isnan(LL):
+                print("thetas_", thetas_)
+                print("first_derivative", first_derivative)
+                print("second_derivative", second_derivative)
+                test = np.array([-np.inf, -np.inf])
+                test1 = np.array([[-np.inf, -np.inf],
+                                  [-np.inf, -np.inf]])
+                LL_ = -np.inf
+            # test = np.array([first_derivative])
+            # test1 = np.array([[second_derivative]])
             
-        except:
-            test = np.array([-np.inf])
-            test1 = np.array([-np.inf])
+            
+        except Exception as e:
+            print(e)
+            test = np.array([-np.inf, -np.inf])
+            test1 = np.array([[-np.inf, -np.inf],
+                              [-np.inf, -np.inf]])
             LL_ = -np.inf
 
 
         return(LL_, test, test1)
 
-    def run_particleFilter(self, mu, rngs):
+    def run_particleFilter(self, thetas, rngs):
         #run particle filter
-        torch.manual_seed(rngs)
+        mu = thetas[0]
+        phi = thetas[1]
+
+        #torch.manual_seed(rngs)
         T = len(self.y)
         P = 150
-        phi = torch.tensor([1.2])
         sigmav = torch.tensor([1.2])
         xp = torch.zeros((T, P))
         lw = torch.zeros(P)
         loglikelihood = torch.zeros(T)
 
-        xp[0] = torch.full((1,P),  0)[0]+torch.randn(P)
+        #####
+        # xp[0] = torch.full((1,P),  0)[0]+torch.randn(P)
+        xp[0] = torch.full((1,P),  0)[0]+rngs.torchRandn(P)
+
         lw[:] = -torch.log(torch.ones(1,1)*P)
 
-        noise = torch.distributions.Normal(0, 1).rsample(torch.tensor([T, P]))
+        #####
+        #noise = torch.distributions.Normal(0, 1).rsample(torch.tensor([T, P]))
+        noise = rngs.torchNormalrsample(torch.tensor([T, P]))
         resampletot = 0
         for t in range(1,T):
             xp[t] =  mu * xp[t-1].clone() + phi * noise[t]
@@ -114,7 +141,10 @@ class Target_PF():
                 resampletot = resampletot + 1
                 #hate_my_life = torch.nn.functional.gumbel_softmax(torch.log(wnorm).repeat(P, 1), tau=1, hard=True)
                 #idx = np.where(hate_my_life[:]==1)[1]
-                idx = torch.multinomial(wnorm, P, replacement=True)
+                #####
+                # idx = torch.multinomial(wnorm, P, replacement=True)
+                idx = rngs.torchMultinomial(P, wnorm)
+
                 xp[:] = xp[:, idx]
                 lw[:] = loglikelihood[t]-torch.log(torch.ones(1,1)*P)
 
@@ -126,46 +156,61 @@ class Q0(Q0_Base):
     def __init__(self):
         self.gauss_pdf = Normal_PDF(mean=np.zeros(1), cov=np.eye(1))
         self.gamma_pdf = Gamma_PDF(a=1, scale=1)
+        self.uni_1_pdf = Uniform_PDF(loc=-1, scale=2)
+        self.uni_2_pdf = Uniform_PDF(loc=0, scale=5)
 
     def logpdf(self, x):
-        return self.gauss_pdf.logpdf(x[0])
+        return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1])
 
     def rvs(self, size, rngs):
-        return np.array([rngs.randomNormal(mu=0, sigma=1, size=1)])
+        return np.array([rngs.randomUniform(-1, 1)[0], rngs.randomUniform(0, 5)[0]])
 
 
 class Q(Q_Base):
     """ Define general proposal """
+    def __init__(self, step_size):
+        self.step_size = step_size
 
     def pdf(self, x, x_cond):
         return (2 * np.pi)**-0.5 * np.exp(-0.5 * (x - x_cond).T @ (x - x_cond))
 
-    def logpdf(self, x, x_cond):
-        
-        return -0.5 * (x - x_cond).T @ (x - x_cond)
+    def logpdf(self, x, x_cond):        
+        #return -0.5 * (x - x_cond).T @ (x - x_cond)
+        return Normal_PDF().logpdf(x, mean=x_cond, cov=self.step_size**2 * np.eye(len(x_cond)))
 
     def rvs(self, x_cond, rngs, grads, grads_1, props):
-        if props == 'first':
-            phi = 0.05
-            new_0 = x_cond + 0.5 * phi**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), phi**2 * np.eye(len(x_cond)))
+        if props == 'first_order':
+            #x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+            x_new = x_cond +0.5 * self.step_size**2 * grads + rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
 
-        if props == 'second':
-            phi = 1
+        if props == 'second_order':
+            print("grads_1 before", grads_1)
             grads_1 = -grads_1
+            print("grads_1", grads_1)
 
-            if self.isPSD(np.array([[grads_1]])):
-                cov = np.linalg.pinv(np.array([[grads_1]])).flatten()
-                cov_1 = phi**2 * np.array([cov])
-                new_01 = x_cond + 0.5 * phi**2 * np.dot(grads, cov) + np.random.multivariate_normal(np.zeros(len(x_cond)), cov_1)
-                new_0 = new_01.flatten()
+            if self.isPSD(grads_1):
+                print("x_cond", x_cond.shape)
+
+                print("grads_1", grads_1.shape)
+
+                cov = np.linalg.pinv(grads_1)#.flatten()
+                print("cov", cov.shape)
+                cov_1 = self.step_size**2 * cov
+                ###np.dot(grads, cov) check dimensions 
+                print("cov_1", cov_1.shape)
+                #x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + np.random.multivariate_normal(np.zeros(len(x_cond)), cov_1)
+                x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + rngs.randomMVNormal(np.zeros(len(x_cond)), cov_1)
 
             else:
-                new_0 = x_cond + 0.5 * phi**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), phi**2 * np.eye(len(x_cond)))
+                # x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+                x_new = x_cond +0.5 * self.step_size**2 * grads + rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
 
-        if props == 'third':
-            new_0 = x_cond + 0.3 * np.random.randn(1)
+        if props == 'rw':
+            #x_new = x_cond + self.step_size * np.random.randn(1)
+            x_new = x_cond + rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
 
-        return new_0
+
+        return x_new
     
     def isPSD(self, x):
         return np.all(np.linalg.eigvals(x) > 0)
@@ -174,20 +219,51 @@ class Q(Q_Base):
 # No. samples and iterations
 N = 8
 K = 2
-D=1
+D=2
 
 p = Target_PF(observations)
 q0 = Q0()
-q = Q()
-optL = 'forwards-proposal'
+# q = Q()
+# optL = 'forwards-proposal'
 
-seed=1
-diagnose = smc_diagnostics_final_output_only(num_particles=N, num_cores=MPI.COMM_WORLD.Get_size(), seed=seed, l_kernel=optL, model="lgssm")
-diagnose.make_run_folder()
-test = []
-proprr = ['third', 'second', 'first']
-for idx, x in enumerate(range(3)):
-    print(proprr[idx])
-    smc = SMC(N, D, p, q0, K, proposal=q, optL=optL, seed=seed, prop=proprr[idx], rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
-    smc.generate_samples()
-    test.append(smc)
+# seed=1
+# diagnose = smc_diagnostics_final_output_only(model="lgssm", proposal=, l_kernel=, step_size=, seed=)
+# diagnose.make_run_folder()
+# test = []
+# proprr = ['third', 'second', 'first']
+# proprr = ['third']
+# for idx, x in enumerate(range(3)):
+#     #print(proprr[idx])
+#     smc = SMC(N, D, p, q0, K, proposal=q, optL=optL, seed=seed, prop=proprr[idx], rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
+#     smc.generate_samples()
+#     test.append(smc)
+
+
+proposals = ['second_order', 'first_order']
+l_kernels = ['forwards-proposal']
+step_sizes = [0.05] #up to 1
+seeds = np.arange(1)
+for proposal in proposals:
+    for l_kernel in l_kernels:
+        for step_size in step_sizes:
+            for seed in seeds:
+                q = Q(step_size)
+                diagnose = smc_diagnostics_final_output_only(model="lgssm", proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
+                diagnose.make_run_folder()
+                smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, prop=proposal, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
+                smc.generate_samples()
+
+# thetas = torch.tensor([0.75, 1.2])
+# thetas_ = torch.tensor(thetas, requires_grad=True)
+# print("thetas_", thetas_)
+
+# first_derivative = grad(p.run_particleFilter(thetas_, 1), thetas_, create_graph=True)[0]
+# print("first_derivative", first_derivative)
+
+# # second_derivative = grad(first_derivative.sum(), thetas_, create_graph=True)[0]
+# # print("sum d", second_derivative)
+
+# second_order_grads = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
+# print(second_order_grads)
+# combo = np.stack(second_order_grads)
+# print(combo)

@@ -132,12 +132,12 @@ class SMC():
             x[ii] = self.q0.rvs(1, rngs[ii])
             
         p_logpdf_x =np.zeros(self.loc_n)
-        p_logpdf_x_grads =np.zeros(self.loc_n)
-        p_logpdf_x_grads_2 =np.zeros(self.loc_n)
+        p_logpdf_x_grads =np.zeros([self.loc_n, self.D])
+        p_logpdf_x_grads_2 =np.zeros([self.loc_n, self.D, self.D])
         p_log_q0_x =np.zeros(self.loc_n)
         
         for ii in range(self.loc_n):
-            p_logpdf_x[ii], p_logpdf_x_grads[ii], p_logpdf_x_grads_2[ii] = self.p.logpdf(x[ii], self.K)
+            p_logpdf_x[ii], p_logpdf_x_grads[ii], p_logpdf_x_grads_2[ii] = self.p.logpdf(x[ii], rngs[ii])
             p_log_q0_x[ii] = self.q0.logpdf(x[ii])
         p_logpdf_x  = np.vstack(p_logpdf_x)
         p_log_q0_x = np.vstack(p_log_q0_x)
@@ -174,26 +174,37 @@ class SMC():
 
             # Resample if effective sample size is below threshold
             if self.Neff[self.k] < self.N/2:
+                print("Resampling")
                 self.resampling_points = np.append(self.resampling_points,
                                                    self.k)								   
                 x, p_logpdf_x, wn, p_logpdf_x_grads, p_logpdf_x_grads_2 = systematic_resampling(x, p_logpdf_x, wn, self.N, mvrs_rng, p_logpdf_x_grads, p_logpdf_x_grads_2)
                 logw = np.log(wn)
-                
+                print("p_logpdf_x_grads_2", p_logpdf_x_grads_2)
             # Propose new samples
             for i in range(self.loc_n):
+                print("proposal hessian", p_logpdf_x_grads_2[i])
                 x_new[i] = self.q.rvs(x_cond=x[i], rngs=rngs[i], grads=p_logpdf_x_grads[i], grads_1=p_logpdf_x_grads_2[i], props=self.prop)
+
+            print("x", x)
+            print("x_new", x_new)
 	        
             # Make sure evaluations of likelihood are vectorised
             p_logpdf_x_new =np.zeros(self.loc_n)
             p_logpdf_x_grads_new = np.zeros((self.loc_n, self.D))
-            p_logpdf_x_grads_new_1 = np.zeros((self.loc_n, self.D))
+            p_logpdf_x_grads_new_1 = np.zeros((self.loc_n, self.D, self.D))
             
             for ii in range(self.loc_n):
-                p_logpdf_x_new[ii], p_logpdf_x_grads_new[ii], p_logpdf_x_grads_new_1[ii] = self.p.logpdf(x_new[ii], self.K)
+                p_logpdf_x_new[ii], p_logpdf_x_grads_new[ii], p_logpdf_x_grads_new_1[ii] = self.p.logpdf(x_new[ii], rngs[ii])
            
             p_logpdf_x_new  = np.vstack(p_logpdf_x_new)
-            p_logpdf_x_grads_new  = np.vstack(p_logpdf_x_grads_new)
-            p_logpdf_x_grads_new_1  = np.vstack(p_logpdf_x_grads_new_1)
+
+            # print("p_logpdf_x_grads_new", p_logpdf_x_grads_new)
+            # p_logpdf_x_grads_new  = np.vstack(p_logpdf_x_grads_new)
+            # print("p_logpdf_x_grads_new after", p_logpdf_x_grads_new)
+
+            # print("p_logpdf_x_grads_new_1", p_logpdf_x_grads_new_1)
+            # p_logpdf_x_grads_new_1  = np.vstack(p_logpdf_x_grads_new_1)
+            # print("p_logpdf_x_grads_new_1 after", p_logpdf_x_grads_new_1)
 
             # Update log weights
             logw_new = self.update_weights(x, x_new, logw, p_logpdf_x,
@@ -224,7 +235,6 @@ class SMC():
                                         self.Neff, self.resampling_points, self.N,
                                         self.runtimes)
     
-
     def update_weights(self, x, x_new, logw, p_logpdf_x,
                        p_logpdf_x_new):
         """

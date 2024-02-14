@@ -17,9 +17,9 @@ class smc_no_diagnostics:
         pass
 
 class smc_diagnostics_final_output_only(smc_no_diagnostics):
-    def __init__(self, num_particles, num_cores, seed, l_kernel, model):
+    def __init__(self, model, proposal, l_kernel, step_size, seed):
         self.now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-        self.fpath = Path(f"outputs/{model}_{l_kernel}",f"particles_{num_particles}",f"cores_{num_cores}",f"seed_{int(seed)}")
+        self.fpath = Path(f"outputs/{model}",f"{proposal}",f"{l_kernel}",f"{step_size}", f"seed_{int(seed)}")
 
     def make_run_folder(self):
         self.fpath.mkdir(parents=True, exist_ok=True)

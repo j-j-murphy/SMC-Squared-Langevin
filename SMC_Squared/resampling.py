@@ -25,24 +25,34 @@ def systematic_resampling(x, p_logpdf_x, wn, N, rng, grads, grads_1):
     P = comm.Get_size()
     loc_n = int(N / P)
     dim = x.shape[1]
-    #need to flatten grads_1(hessian)
-    
-    grads = grads.reshape(-1, 1)
-    grads_1 = grads_1.reshape(-1, 1)
-    x = np.concatenate((x, grads, grads_1), axis=1)
+
+    # print("Before resampling_______")
+    # print("x", x)
+    # print("p_logpdf_x", p_logpdf_x)
+    # print("wn", wn)
+    # print("grads", grads)
+    # print("grads_1", grads_1)
+    # print("_________________________")
+
+    grads = grads
+    grads_1 = grads_1.reshape(-1, dim**2)
+    p_logpdf_x = p_logpdf_x.reshape(-1, 1)
+    x = np.concatenate((x, grads, grads_1, p_logpdf_x), axis=1)
     
     ncopies = get_number_of_copies(wn, rng)
-    p_logpdf_x_shape = p_logpdf_x.shape
-    x = np.hstack((x, np.reshape(p_logpdf_x, newshape=(len(p_logpdf_x), 1))))
     x = redistribute(x, ncopies)
     
-    #unpack x, grads, hessian
-    x = x[:, 0:x.shape[1]]
-    grads_new = x[:, dim:(2*dim)].reshape(len(grads),)
-    grads_new_1 = x[:, (2*dim):(2*dim+dim**2)].reshape(len(grads_new),)
-
-    wn_new = np.ones(loc_n) / N
     x_new = x[:, 0:dim]
-    p_logpdf_x_new = np.reshape(x[:, -1], newshape=p_logpdf_x_shape)
+    grads_new = x[:, dim:(2*dim)]
+    grads_new_1 = x[:, (2*dim):(2*dim+dim**2)].reshape(len(grads_new), dim, dim)
+    p_logpdf_x_new = x[:, -1].reshape(len(p_logpdf_x), )
+
+    # print("After resampling_______")
+    # print("x_new", x_new)
+    # print("p_logpdf_x_new", p_logpdf_x_new)
+    # print("grads_new", grads_new)
+    # print("grads_new_1", grads_new_1)
+    # print("_________________________")
+    wn_new = np.ones(loc_n) / N    
 
     return x_new, p_logpdf_x_new, wn_new, grads_new, grads_new_1
