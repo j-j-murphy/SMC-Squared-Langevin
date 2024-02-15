@@ -59,17 +59,14 @@ class Target_PF():
     """ Define target """
     def logpdf(self, thetas, rngs):
         thetas_ = torch.tensor(thetas, requires_grad=True)
-        print("thetas", thetas_)
 
         ######
         try:
             first_derivative = grad(self.run_particleFilter(thetas_, rngs), thetas_, create_graph=True)[0]
-            print("1st deriv",first_derivative)
             # We now have dloss/dx
 
             second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
             second_derivative = np.stack(second_derivative)
-            print("2nd deriv", second_derivative)
             LL = self.run_particleFilter(thetas_, rngs)
 
 
@@ -85,9 +82,7 @@ class Target_PF():
             test1 = second_derivative
             LL_=LL.detach().numpy()
             if np.any(np.isnan(first_derivative)) or np.any(np.isnan(second_derivative)) or torch.isnan(LL):
-                print("thetas_", thetas_)
-                print("first_derivative", first_derivative)
-                print("second_derivative", second_derivative)
+                print("thetas_ causes nan", thetas_)
                 test = np.array([-np.inf, -np.inf])
                 test1 = np.array([[-np.inf, -np.inf],
                                   [-np.inf, -np.inf]])
@@ -168,49 +163,61 @@ class Q0(Q0_Base):
 
 class Q(Q_Base):
     """ Define general proposal """
-    def __init__(self, step_size):
+    def __init__(self, step_size, prop):
         self.step_size = step_size
+        self.prop = prop
 
     def pdf(self, x, x_cond):
         return (2 * np.pi)**-0.5 * np.exp(-0.5 * (x - x_cond).T @ (x - x_cond))
 
-    def logpdf(self, x, x_cond):        
-        #return -0.5 * (x - x_cond).T @ (x - x_cond)
-        return Normal_PDF().logpdf(x, mean=x_cond, cov=self.step_size**2 * np.eye(len(x_cond)))
-
-    def rvs(self, x_cond, rngs, grads, grads_1, props):
-        if props == 'first_order':
-            #x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
-            x_new = x_cond +0.5 * self.step_size**2 * grads + rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
-
-        if props == 'second_order':
-            print("grads_1 before", grads_1)
+    def logpdf(self, x, x_cond, v, grads_1):        
+        if self.prop == 'first_order':
+            logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(v)
+        
+        if self.prop == 'second_order':
             grads_1 = -grads_1
-            print("grads_1", grads_1)
 
             if self.isPSD(grads_1):
-                print("x_cond", x_cond.shape)
-
-                print("grads_1", grads_1.shape)
-
                 cov = np.linalg.pinv(grads_1)#.flatten()
-                print("cov", cov.shape)
+                cov_1 = self.step_size**2 * cov
+                logpdf = Normal_PDF(mean=x_cond, cov=cov_1).logpdf(v)
+            else:
+                logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(v)
+        
+        if self.prop == 'rw':
+            logpdf = Normal_PDF(mean=x_cond, cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(x)
+        
+        return logpdf
+    
+
+    def rvs(self, x_cond, rngs, grads, grads_1):
+        if self.prop == 'first_order':
+            #x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+            v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+            x_new = x_cond +0.5 * self.step_size**2 * grads + v
+
+        elif self.prop == 'second_order':
+            grads_1 = -grads_1
+
+            if self.isPSD(grads_1):
+                cov = np.linalg.pinv(grads_1)#.flatten()
                 cov_1 = self.step_size**2 * cov
                 ###np.dot(grads, cov) check dimensions 
-                print("cov_1", cov_1.shape)
                 #x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + np.random.multivariate_normal(np.zeros(len(x_cond)), cov_1)
-                x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + rngs.randomMVNormal(np.zeros(len(x_cond)), cov_1)
+                v = rngs.randomMVNormal(np.zeros(len(x_cond)), cov_1)
+                x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + v
 
             else:
                 # x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
-                x_new = x_cond +0.5 * self.step_size**2 * grads + rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+                v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+                x_new = x_cond + 0.5 * self.step_size**2 * grads + v
 
-        if props == 'rw':
+        elif self.prop == 'rw':
             #x_new = x_cond + self.step_size * np.random.randn(1)
-            x_new = x_cond + rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+            v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
+            x_new = x_cond + v
 
-
-        return x_new
+        return x_new, v
     
     def isPSD(self, x):
         return np.all(np.linalg.eigvals(x) > 0)
@@ -219,51 +226,24 @@ class Q(Q_Base):
 # No. samples and iterations
 N = 8
 K = 2
-D=2
+D = 2
 
 p = Target_PF(observations)
 q0 = Q0()
-# q = Q()
-# optL = 'forwards-proposal'
-
-# seed=1
-# diagnose = smc_diagnostics_final_output_only(model="lgssm", proposal=, l_kernel=, step_size=, seed=)
-# diagnose.make_run_folder()
-# test = []
-# proprr = ['third', 'second', 'first']
-# proprr = ['third']
-# for idx, x in enumerate(range(3)):
-#     #print(proprr[idx])
-#     smc = SMC(N, D, p, q0, K, proposal=q, optL=optL, seed=seed, prop=proprr[idx], rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
-#     smc.generate_samples()
-#     test.append(smc)
 
 
 proposals = ['second_order', 'first_order']
-l_kernels = ['forwards-proposal']
+l_kernels = ['gauss']
 step_sizes = [0.05] #up to 1
 seeds = np.arange(1)
 for proposal in proposals:
     for l_kernel in l_kernels:
         for step_size in step_sizes:
             for seed in seeds:
-                q = Q(step_size)
+                print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
+                q = Q(step_size, proposal)
                 diagnose = smc_diagnostics_final_output_only(model="lgssm", proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
                 diagnose.make_run_folder()
-                smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, prop=proposal, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
+                smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
                 smc.generate_samples()
 
-# thetas = torch.tensor([0.75, 1.2])
-# thetas_ = torch.tensor(thetas, requires_grad=True)
-# print("thetas_", thetas_)
-
-# first_derivative = grad(p.run_particleFilter(thetas_, 1), thetas_, create_graph=True)[0]
-# print("first_derivative", first_derivative)
-
-# # second_derivative = grad(first_derivative.sum(), thetas_, create_graph=True)[0]
-# # print("sum d", second_derivative)
-
-# second_order_grads = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
-# print(second_order_grads)
-# combo = np.stack(second_order_grads)
-# print(combo)

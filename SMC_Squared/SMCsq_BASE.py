@@ -48,7 +48,7 @@ class SMC():
     P.L.Green and L.J. Devlin
     """
 
-    def __init__(self, N, D, p, q0, K, proposal, optL, seed, prop, 
+    def __init__(self, N, D, p, q0, K, proposal, optL, seed, 
                  rc_scheme=None, verbose=False, diagnose=None):
 
         # Assign variables to self
@@ -60,7 +60,6 @@ class SMC():
         self.K = K
         self.optL = optL
         self.seed = seed
-        self.prop = prop
         self.verbose = verbose
         self.rank = MPI.COMM_WORLD.Get_rank()
 
@@ -101,6 +100,7 @@ class SMC():
         # Initialise arrays for storing samples (x_new)
         x_new = np.zeros([self.loc_n, self.D])
         x = np.zeros([self.loc_n, self.D])
+        v = np.zeros([self.loc_n, self.D])
 
         # Runtimes for each iteration
         self.runtimes = np.zeros(self.K)
@@ -179,14 +179,13 @@ class SMC():
                                                    self.k)								   
                 x, p_logpdf_x, wn, p_logpdf_x_grads, p_logpdf_x_grads_2 = systematic_resampling(x, p_logpdf_x, wn, self.N, mvrs_rng, p_logpdf_x_grads, p_logpdf_x_grads_2)
                 logw = np.log(wn)
-                print("p_logpdf_x_grads_2", p_logpdf_x_grads_2)
             # Propose new samples
             for i in range(self.loc_n):
-                print("proposal hessian", p_logpdf_x_grads_2[i])
-                x_new[i] = self.q.rvs(x_cond=x[i], rngs=rngs[i], grads=p_logpdf_x_grads[i], grads_1=p_logpdf_x_grads_2[i], props=self.prop)
-
-            print("x", x)
-            print("x_new", x_new)
+                ####logpdf####
+                ####rvs####
+                ####update weights###
+                ####v[i]####
+                x_new[i], v[i] = self.q.rvs(x_cond=x[i], rngs=rngs[i], grads=p_logpdf_x_grads[i], grads_1=p_logpdf_x_grads_2[i])
 	        
             # Make sure evaluations of likelihood are vectorised
             p_logpdf_x_new =np.zeros(self.loc_n)
@@ -198,17 +197,10 @@ class SMC():
            
             p_logpdf_x_new  = np.vstack(p_logpdf_x_new)
 
-            # print("p_logpdf_x_grads_new", p_logpdf_x_grads_new)
-            # p_logpdf_x_grads_new  = np.vstack(p_logpdf_x_grads_new)
-            # print("p_logpdf_x_grads_new after", p_logpdf_x_grads_new)
-
-            # print("p_logpdf_x_grads_new_1", p_logpdf_x_grads_new_1)
-            # p_logpdf_x_grads_new_1  = np.vstack(p_logpdf_x_grads_new_1)
-            # print("p_logpdf_x_grads_new_1 after", p_logpdf_x_grads_new_1)
-
             # Update log weights
-            logw_new = self.update_weights(x, x_new, logw, p_logpdf_x,
-                                           p_logpdf_x_new)
+            # also pass v
+            logw_new = self.update_weights(x, x_new, v, logw, p_logpdf_x,
+                                           p_logpdf_x_new, p_logpdf_x_grads_new_1)
                                            
             # Make sure that, if p.logpdf(x_new) is -inf, then logw_new
             # will also be -inf. Otherwise it is returned as NaN.
@@ -235,8 +227,8 @@ class SMC():
                                         self.Neff, self.resampling_points, self.N,
                                         self.runtimes)
     
-    def update_weights(self, x, x_new, logw, p_logpdf_x,
-                       p_logpdf_x_new):
+    def update_weights(self, x, x_new, v, logw, p_logpdf_x,
+                       p_logpdf_x_new, grads_2):
         """
         Description
         -----------
@@ -268,46 +260,48 @@ class SMC():
 
         # Use the forwards proposal as the L-kernel
         if self.optL == 'forwards-proposal':
-            # Find new weights
-            for i in range(self.loc_n):  # Changed N to loc_n
+            for i in range(self.loc_n):
                 logw_new[i] = (logw[i] +
                                p_logpdf_x_new[i] -
-                               p_logpdf_x[i])
+                               p_logpdf_x[i] +
+                               self.q.logpdf(x_new[i], x[i], -v[i], grads_2[i]) - 
+                               self.q.logpdf(x[i], x_new[i], v[i], grads_2[i]))
 
         # Use Gaussian approximation of the optimal L-kernel
         # (see Section 4.1 of https://www.sciencedirect.com/science/article/pii/S0888327021004222
         #  or Section 4.1 of https://arxiv.org/pdf/2004.12838.pdf)
-        if self.optL == 'gauss':
-
-            # Collect x and x_new together into X
-            X = np.hstack([x, x_new])
+        if self.optL == 'gauss':         
+            # Collect v_new and x_new together into X
+            X = np.hstack([-v, x_new])
 
             # Directly estimate the mean and covariance matrix of X
-            mu_X = IS.weighted_mean(x=X, wn=np.repeat(1/self.N, self.loc_n))  # mu_X = np.mean(X, axis=0)
-            cov_X = IS.covar(wn=np.repeat(1/self.N, self.loc_n), x=X, m=mu_X)  # np.cov(np.transpose(X))
+            # mu_X = np.mean(X, axis=0)
+            # cov_X = np.cov(np.transpose(X))
+            mu_X = IS.weighted_mean(x=X, wn=np.repeat(1/self.N, self.loc_n))
+            cov_X = IS.covar(wn=np.repeat(1/self.N, self.loc_n), x=X, m=mu_X)  
 
-            # Find mean of the joint distribution (p(x, x_new))
-            mu_x, mu_xnew = mu_X[0:self.D], mu_X[self.D:2 * self.D]
+            # Find mean of the joint distribution (p(v_-new, x_new))
+            mu_negvnew, mu_xnew = mu_X[0:self.D], mu_X[self.D:2 * self.D]
 
-            # Find covariance matrix of joint distribution (p(x, x_new))
-            (cov_x_x,
-             cov_x_xnew,
-             cov_xnew_x,
+            # Find covariance matrix of joint distribution (p(-v_new, x_new))
+            (cov_negvnew_negv,
+             cov_negvnew_xnew,
+             cov_xnew_negvnew,
              cov_xnew_xnew) = (cov_X[0:self.D, 0:self.D],
                                cov_X[0:self.D, self.D:2 * self.D],
                                cov_X[self.D:2 * self.D, 0:self.D],
                                cov_X[self.D:2 * self.D, self.D:2 * self.D])
 
             # Define new L-kernel
-            def L_logpdf(x, x_cond):
+            def L_logpdf(negvnew, x_new):
 
                 # Mean of approximately optimal L-kernel
-                mu = (mu_x + cov_x_xnew @ np.linalg.inv(cov_xnew_xnew) @
-                      (x_cond - mu_xnew))
+                mu = (mu_negvnew + cov_negvnew_xnew @ np.linalg.inv(cov_xnew_xnew) @
+                      (x_new - mu_xnew))
 
                 # Variance of approximately optimal L-kernel
-                cov = (cov_x_x - cov_x_xnew @
-                       np.linalg.inv(cov_xnew_xnew) @ cov_xnew_x)
+                cov = (cov_negvnew_negv - cov_negvnew_xnew @
+                       np.linalg.inv(cov_xnew_xnew) @ cov_xnew_negvnew)
 
                 # Add ridge to avoid singularities
                 cov += np.eye(self.D) * 1e-6
@@ -321,34 +315,16 @@ class SMC():
 
                 # Find log pdf
                 logpdf = (-0.5 * log_det_cov -
-                          0.5 * (x - mu).T @ inv_cov @ (x - mu))
+                          0.5 * (negvnew - mu).T @ inv_cov @ (negvnew - mu))
 
                 return logpdf
 
-            # Find new weights
+            # Find new weights, Backwards L kerenl parameterised on (-v_new, x_new)
             for i in range(self.loc_n):
                 logw_new[i] = (logw[i] +
                                p_logpdf_x_new[i] -
                                p_logpdf_x[i] +
-                               L_logpdf(x[i], x_new[i]) -
-                               self.q.logpdf(x_new[i], x[i]))
-
-        # Use Monte-Carlo approximation of the optimal L-kernel
-        # (not published at the moment but see
-        # https://www.overleaf.com/project/6130ff176124735112a885b3)
-        if self.optL == 'monte-carlo':
-            for i in range(self.N):
-
-                # Initialise what will be the denominator of our
-                # weight-update equation
-                den = np.zeros(1)
-
-                # Realise Monte-Carlo estimate of denominator
-                for j in range(self.N):
-                    den += self.q.pdf(x_new[i], x[j])
-                den /= self.N
-
-                # Calculate new log-weight
-                logw_new[i] = p_logpdf_x_new[i] - np.log(den)
+                                L_logpdf(-v[i], x_new[i]) -
+                               self.q.logpdf(x[i], x_new[i], v[i], grads_2[i]))
 
         return logw_new
