@@ -69,10 +69,6 @@ class Target_PF():
             second_derivative = np.stack(second_derivative)
             LL = self.run_particleFilter(thetas_, rngs)
 
-
-            #grad_prior_mu_first = grad(torch.distributions.Normal(0, 1).log_prob(mu_), mu_, create_graph=True)[0]
-            #grad_prior_mu_second = grad(grad_prior_mu_first, mu_)[0]
-
             first_derivative  = first_derivative.detach().numpy() #+ grad_prior_mu_first.detach().numpy()
             second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
             # print("is nan first", np.any(np.isnan(first_derivative)))
@@ -82,13 +78,15 @@ class Target_PF():
             test1 = second_derivative
             LL_=LL.detach().numpy()
             if np.any(np.isnan(first_derivative)) or np.any(np.isnan(second_derivative)) or torch.isnan(LL):
-                print("thetas_ causes nan", thetas_)
                 test = np.array([-np.inf, -np.inf])
                 test1 = np.array([[-np.inf, -np.inf],
                                   [-np.inf, -np.inf]])
                 LL_ = -np.inf
             # test = np.array([first_derivative])
             # test1 = np.array([[second_derivative]])
+            print("thetas_ causes nan", thetas_)
+            print("first_derivative", first_derivative)
+            print("second_derivative", second_derivative)
             
             
         except Exception as e:
@@ -114,8 +112,6 @@ class Target_PF():
         lw = torch.zeros(P)
         loglikelihood = torch.zeros(T)
 
-        #####
-        # xp[0] = torch.full((1,P),  0)[0]+torch.randn(P)
         xp[0] = torch.full((1,P),  0)[0]+rngs.torchRandn(P)
 
         lw[:] = -torch.log(torch.ones(1,1)*P)
@@ -134,10 +130,6 @@ class Target_PF():
 
             if(neff<P/2):
                 resampletot = resampletot + 1
-                #hate_my_life = torch.nn.functional.gumbel_softmax(torch.log(wnorm).repeat(P, 1), tau=1, hard=True)
-                #idx = np.where(hate_my_life[:]==1)[1]
-                #####
-                # idx = torch.multinomial(wnorm, P, replacement=True)
                 idx = rngs.torchMultinomial(P, wnorm)
 
                 xp[:] = xp[:, idx]
@@ -192,7 +184,6 @@ class Q(Q_Base):
 
     def rvs(self, x_cond, rngs, grads, grads_1):
         if self.prop == 'first_order':
-            #x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
             v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
             x_new = x_cond +0.5 * self.step_size**2 * grads + v
 
@@ -202,18 +193,14 @@ class Q(Q_Base):
             if self.isPSD(grads_1):
                 cov = np.linalg.pinv(grads_1)#.flatten()
                 cov_1 = self.step_size**2 * cov
-                ###np.dot(grads, cov) check dimensions 
-                #x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + np.random.multivariate_normal(np.zeros(len(x_cond)), cov_1)
                 v = rngs.randomMVNormal(np.zeros(len(x_cond)), cov_1)
                 x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + v
 
             else:
-                # x_new = x_cond + 0.5 * self.step_size**2 * grads + np.random.multivariate_normal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
                 v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
                 x_new = x_cond + 0.5 * self.step_size**2 * grads + v
 
         elif self.prop == 'rw':
-            #x_new = x_cond + self.step_size * np.random.randn(1)
             v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
             x_new = x_cond + v
 
@@ -224,25 +211,25 @@ class Q(Q_Base):
 
 
 # No. samples and iterations
-N = 8
-K = 2
+N = 16
+K = 10
 D = 2
 
 p = Target_PF(observations)
 q0 = Q0()
 
-
-proposals = ['second_order', 'first_order']
-l_kernels = ['gauss']
-step_sizes = [0.05] #up to 1
-seeds = np.arange(1)
+model = f"lgssm_{N}_test"
+proposals = ['second_order']#, 'first_order', 'rw']
+l_kernels = ['forwards-proposal']#46782281
+step_sizes = [0.04, 0.065, 1.50]#np.linspace(0.1, 1, 10)
+seeds = np.arange(0, 5)
 for proposal in proposals:
     for l_kernel in l_kernels:
         for step_size in step_sizes:
             for seed in seeds:
                 print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
                 q = Q(step_size, proposal)
-                diagnose = smc_diagnostics_final_output_only(model="lgssm", proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
+                diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
                 diagnose.make_run_folder()
                 smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
                 smc.generate_samples()

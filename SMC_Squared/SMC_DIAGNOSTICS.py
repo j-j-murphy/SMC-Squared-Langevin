@@ -20,6 +20,8 @@ class smc_diagnostics_final_output_only(smc_no_diagnostics):
     def __init__(self, model, proposal, l_kernel, step_size, seed):
         self.now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
         self.fpath = Path(f"outputs/{model}",f"{proposal}",f"{l_kernel}",f"{step_size}", f"seed_{int(seed)}")
+        self.fpath = Path(f"outputs/{model}", f"{step_size}", f"{l_kernel}", f"{proposal}", f"seed_{int(seed)}")
+
 
     def make_run_folder(self):
         self.fpath.mkdir(parents=True, exist_ok=True)
@@ -39,9 +41,9 @@ class smc_diagnostics_final_output_only(smc_no_diagnostics):
 
         var = np.reshape(var, (var.shape[0], -1))
         var_rc = np.reshape(var_rc, (var_rc.shape[0], -1))
+
         np.savetxt(Path(self.fpath,"var.csv"), var, delimiter=",")
         np.savetxt(Path(self.fpath,"var_rc.csv"), var_rc, delimiter=",")
-
         np.savetxt(Path(self.fpath,"runtime_iterations.csv"), runtime_iterations, delimiter=",")
 
 class smc_diagnostics(smc_diagnostics_final_output_only):
