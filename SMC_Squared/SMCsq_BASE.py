@@ -149,7 +149,7 @@ class SMC():
         # Main sampling loop
         for self.k in range(self.K):
 
-            if self.verbose and self.rank==1:
+            if self.verbose and self.rank==0:
                 print('\nIteration :', self.k)
 
             # Find normalised weights and realise estimates
@@ -174,11 +174,13 @@ class SMC():
 
             # Resample if effective sample size is below threshold
             if self.Neff[self.k] < self.N/2:
-                print("Resampling")
+                if self.verbose and self.rank==0:
+                    print("Resampling")
                 self.resampling_points = np.append(self.resampling_points,
                                                    self.k)								   
                 x, p_logpdf_x, wn, p_logpdf_x_grads, p_logpdf_x_grads_2 = systematic_resampling(x, p_logpdf_x, wn, self.N, mvrs_rng, p_logpdf_x_grads, p_logpdf_x_grads_2)
                 logw = np.log(wn)
+
             # Propose new samples
             for i in range(self.loc_n):
                 ####logpdf####
@@ -200,7 +202,8 @@ class SMC():
             # Update log weights
             # also pass v
             logw_new = self.update_weights(x, x_new, v, logw, p_logpdf_x,
-                                           p_logpdf_x_new, p_logpdf_x_grads_new_1)
+                                           p_logpdf_x_new, p_logpdf_x_grads_2, 
+                                           p_logpdf_x_grads_2)
                                            
             # Make sure that, if p.logpdf(x_new) is -inf, then logw_new
             # will also be -inf. Otherwise it is returned as NaN.
@@ -228,7 +231,7 @@ class SMC():
                                         self.runtimes)
     
     def update_weights(self, x, x_new, v, logw, p_logpdf_x,
-                       p_logpdf_x_new, grads_2):
+                       p_logpdf_x_new, grads_2, grads_2_new):
         """
         Description
         -----------
@@ -264,7 +267,7 @@ class SMC():
                 logw_new[i] = (logw[i] +
                                p_logpdf_x_new[i] -
                                p_logpdf_x[i] +
-                               self.q.logpdf(x_new[i], x[i], -v[i], grads_2[i]) - 
+                               self.q.logpdf(x_new[i], x[i], -v[i], grads_2_new[i]) - 
                                self.q.logpdf(x[i], x_new[i], v[i], grads_2[i]))
 
         # Use Gaussian approximation of the optimal L-kernel

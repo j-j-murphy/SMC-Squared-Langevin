@@ -6,11 +6,11 @@ import itertools
 
 # Base directory and model components setup
 base_dir = 'outputs'
-models = ["lgssm_16"]
-l_kernels = ["forwards-proposal"]
-proposals = ['second_order', 'first_order', 'rw']
-step_sizes = ['0.05']
-seeds = ['seed_0']
+models = ["lgssm_16_test"]
+l_kernels = ["forwards-proposal", "gauss"]
+proposals = ['second_order']
+step_sizes = ['1.5']
+seeds = [f'seed_{i}' for i in range(5)]
 
 # Define true parameter values for RMSE calculation and plotting
 true_values = {

@@ -71,22 +71,18 @@ class Target_PF():
 
             first_derivative  = first_derivative.detach().numpy() #+ grad_prior_mu_first.detach().numpy()
             second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
-            # print("is nan first", np.any(np.isnan(first_derivative)))
-            # print("second", np.any(np.isnan(second_derivative)))
-            # print("LL" , np.isnan(LL))
             test = first_derivative
             test1 = second_derivative
             LL_=LL.detach().numpy()
             if np.any(np.isnan(first_derivative)) or np.any(np.isnan(second_derivative)) or torch.isnan(LL):
+                print("here")
                 test = np.array([-np.inf, -np.inf])
                 test1 = np.array([[-np.inf, -np.inf],
                                   [-np.inf, -np.inf]])
                 LL_ = -np.inf
             # test = np.array([first_derivative])
             # test1 = np.array([[second_derivative]])
-            print("thetas_ causes nan", thetas_)
-            print("first_derivative", first_derivative)
-            print("second_derivative", second_derivative)
+            
             
             
         except Exception as e:
@@ -175,7 +171,7 @@ class Q(Q_Base):
                 logpdf = Normal_PDF(mean=x_cond, cov=cov_1).logpdf(v)
             else:
                 logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(v)
-        
+            
         if self.prop == 'rw':
             logpdf = Normal_PDF(mean=x_cond, cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(x)
         
@@ -207,8 +203,10 @@ class Q(Q_Base):
         return x_new, v
     
     def isPSD(self, x):
-        return np.all(np.linalg.eigvals(x) > 0)
-
+        try:
+            return np.all(np.linalg.eigvals(x) > 0)
+        except:
+            return False
 
 # No. samples and iterations
 N = 16
@@ -218,16 +216,17 @@ D = 2
 p = Target_PF(observations)
 q0 = Q0()
 
-model = f"lgssm_{N}_test"
+model = f"lgssm_{N}_new_hess"
 proposals = ['second_order']#, 'first_order', 'rw']
-l_kernels = ['forwards-proposal']#46782281
-step_sizes = [0.04, 0.065, 1.50]#np.linspace(0.1, 1, 10)
-seeds = np.arange(0, 5)
+l_kernels = ['forwards-proposal', 'gauss']
+step_sizes = [1.5]#np.linspace(0.1, 1, 10)
+seeds = np.arange(0, 1)
 for proposal in proposals:
     for l_kernel in l_kernels:
         for step_size in step_sizes:
             for seed in seeds:
-                print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
+                if MPI.COMM_WORLD.Get_rank() == 0:
+                    print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
                 q = Q(step_size, proposal)
                 diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
                 diagnose.make_run_folder()
