@@ -57,7 +57,7 @@ class Target_PF():
         self.y = y
     
     """ Define target """
-    def logpdf(self, thetas, rngs):
+    def logpdf(self, thetas, rngs, diag_hessian=True):
         thetas_ = torch.tensor(thetas, requires_grad=True)
 
         ######
@@ -68,6 +68,12 @@ class Target_PF():
             second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
             second_derivative = np.stack(second_derivative)
             LL = self.run_particleFilter(thetas_, rngs)
+
+            if diag_hessian:
+                for i in range(len(thetas_)):
+                    for j in range(len(thetas_)):
+                        if i != j:
+                            second_derivative[i][j] = 0
 
             first_derivative  = first_derivative.detach().numpy() #+ grad_prior_mu_first.detach().numpy()
             second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
@@ -209,18 +215,30 @@ class Q(Q_Base):
             return False
 
 # No. samples and iterations
-N = 16
+N = 64
 K = 10
 D = 2
 
 p = Target_PF(observations)
 q0 = Q0()
 
-model = f"lgssm_{N}_new_hess"
-proposals = ['second_order']#, 'first_order', 'rw']
-l_kernels = ['forwards-proposal', 'gauss']
-step_sizes = [1.5]#np.linspace(0.1, 1, 10)
-seeds = np.arange(0, 1)
+model = f"lgssm_{N}_explore"
+proposals = ['rw']#, 'first_order', 'rw']
+l_kernels = ['gauss', 'forwards-proposal']
+# step_sizes = np.linspace(1.0, 1.6, 61)
+# step_sizes = np.linspace(0.03, 0.05, 21)
+step_sizes = np.linspace(0.45, 0.55, 11)
+#step_sizes = np.linspace(1.0, 1.2, 21)
+seeds = np.arange(0, 5)
+
+if MPI.COMM_WORLD.Get_rank() == 0:
+    print("Plotting info")
+    print(f"models: {model}")
+    print(f"proposals: {proposals}")
+    print(f"l_kernels: {l_kernels}")
+    print(f"step_sizes: {step_sizes}")
+    print(f"seeds: {seeds}")
+
 for proposal in proposals:
     for l_kernel in l_kernels:
         for step_size in step_sizes:

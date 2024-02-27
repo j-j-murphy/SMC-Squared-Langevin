@@ -8,17 +8,17 @@
 # Define a standard output file. When the job is running, %u will be replaced by user name,
 # %N will be replaced by the name of the node that runs the batch script, and %j will be replaced by job id number.
 #SBATCH -o logs/%x.out
-#SBATCH --exclusive
+#####SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p bighyp
-#SBATCH --ntasks=16
-#SBATCH --ntasks-per-node=16
-#SBATCH -J lgssm_16
+#SBATCH -p nodes,bighyp
+#SBATCH --ntasks=32
+#SBATCH --ntasks-per-node=32
+#SBATCH -J lgssm_64_rw
 
 #SBATCH -c 1
 # This asks for 10 minutes of time.
-#SBATCH -t 72:00:00
+#SBATCH -t 24:00:00
 # Specify memory per core
 ##SBATCH --mem-per-cpu=8000M
 # Insert your own username to get e-mail notifications

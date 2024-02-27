@@ -6,11 +6,15 @@ import itertools
 
 # Base directory and model components setup
 base_dir = 'outputs'
-models = ["lgssm_16_test"]
-l_kernels = ["forwards-proposal", "gauss"]
-proposals = ['second_order']
-step_sizes = ['1.5']
-seeds = [f'seed_{i}' for i in range(5)]
+models = ["lgssm_32_explore"]
+l_kernels = ["gauss"]#, "gauss"]
+proposals = ["first_order"]
+# step_sizes = [str(round(i, 3)) for i in np.linspace(1.0, 1.6, 61)]
+# step_sizes = [str(round(i, 3)) for i in np.linspace(0.45, 0.55, 11)]
+step_sizes = [str(round(i, 3)) for i in np.linspace(0.03, 0.05, 21)]
+
+
+seeds = [f'seed_{i}' for i in range(10)]
 
 # Define true parameter values for RMSE calculation and plotting
 true_values = {

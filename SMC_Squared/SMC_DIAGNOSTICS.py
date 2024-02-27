@@ -20,7 +20,7 @@ class smc_diagnostics_final_output_only(smc_no_diagnostics):
     def __init__(self, model, proposal, l_kernel, step_size, seed):
         self.now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
         self.fpath = Path(f"outputs/{model}",f"{proposal}",f"{l_kernel}",f"{step_size}", f"seed_{int(seed)}")
-        self.fpath = Path(f"outputs/{model}", f"{step_size}", f"{l_kernel}", f"{proposal}", f"seed_{int(seed)}")
+        self.fpath = Path(f"outputs/{model}", f"{np.round(step_size, 3)}", f"{l_kernel}", f"{proposal}", f"seed_{int(seed)}")
 
 
     def make_run_folder(self):
