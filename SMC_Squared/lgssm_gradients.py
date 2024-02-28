@@ -3,6 +3,7 @@ import sys
 sys.path.append('..')  # noqa
 from numpy.random import randn, choice
 import matplotlib.pyplot as plt
+import argparse
 from mpi4py import MPI
 
 from scipy.stats import multivariate_normal as Normal_PDF
@@ -22,6 +23,13 @@ from torch.autograd.functional import hessian
 from SMCsq_BASE import SMC
 from SMC_TEMPLATES import Target_Base, Q0_Base, Q_Base
 from SMC_DIAGNOSTICS import smc_no_diagnostics, smc_diagnostics_final_output_only, smc_diagnostics
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-p', '--proposal', type=str, default='rw')
+parser.add_argument('-start', '--start_step_size', type=float, default=0.1)
+parser.add_argument('-num', '--num_steps', type=int, default=10)
+parser.add_argument('-stride', '--step_size_stride', type=float, default=0.1)
+args = parser.parse_args()
 
 torch.manual_seed(42)
 def generateData(theta, noObservations, initialState):
@@ -97,9 +105,8 @@ class Target_PF():
 
         except Exception as e:
             print(e)
-            test = np.array([-np.inf, -np.inf])
-            test1 = np.array([[-np.inf, -np.inf],
-                              [-np.inf, -np.inf]])
+            grads = np.full(len(thetas), -np.inf)
+            grads2 = np.full((len(thetas), len(thetas)), -np.inf)
             LL_ = -np.inf
 
         return(LL_, grads, grads2)
@@ -219,16 +226,16 @@ D = 3
 
 q0 = Q0()
 
-model = f"lgssm_{N}_explore"
-proposals = ['second_order']#, 'first_order', 'rw']
+model = f"lgssm_{N}_3d"
+proposals = [args.proposal]#, 'first_order', 'rw']
 l_kernels = ['gauss', 'forwards-proposal']
 # step_sizes = np.linspace(1.0, 1.6, 61)
 # step_sizes = np.linspace(0.03, 0.05, 21)
 #step_sizes = np.linspace(0.45, 0.55, 11)
-step_sizes = [0.06]
+step_sizes = args.start_step_size + np.arange(0, args.num_steps) * args.step_size_stride
 #step_sizes = np.linspace(1.0, 1.2, 21)
 #seeds = np.arange(0, 5)
-seeds=[0]
+seeds = np.arange(0, 3)
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     print("Plotting info")
