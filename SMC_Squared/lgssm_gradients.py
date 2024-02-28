@@ -258,4 +258,3 @@ for proposal in proposals:
                 diagnose.make_run_folder()
                 smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
                 smc.generate_samples()
-
