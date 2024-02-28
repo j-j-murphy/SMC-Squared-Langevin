@@ -53,8 +53,11 @@ plt.plot(observations)
 
 class Target_PF():
     
-    def __init__(self, y):
+    def __init__(self, y, prop, prior_logpdf, diag_hessian=True):
         self.y = y
+        self.prop = prop
+        self.diag_hessian = diag_hessian
+        self.prior_logpdf = prior_logpdf
     
     """ Define target """
     def logpdf(self, thetas, rngs, diag_hessian=True):
@@ -62,35 +65,37 @@ class Target_PF():
 
         ######
         try:
-            first_derivative = grad(self.run_particleFilter(thetas_, rngs), thetas_, create_graph=True)[0]
-            # We now have dloss/dx
-
-            second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
-            second_derivative = np.stack(second_derivative)
             LL = self.run_particleFilter(thetas_, rngs)
+            grads = np.zeros(len(thetas))
+            grads2 = np.zeros((len(thetas), len(thetas)))
 
-            if diag_hessian:
-                for i in range(len(thetas_)):
-                    for j in range(len(thetas_)):
-                        if i != j:
-                            second_derivative[i][j] = 0
+            if self.prop == 'first_order' or self.prop == 'second_order':
+                first_derivative = grad(LL, thetas_, create_graph=True)[0]
+                grads = first_derivative.detach().numpy()#+ grad_prior_mu_first.detach().numpy()
+            
+                if self.prop == 'second_order':
+                    second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
+                    second_derivative = np.stack(second_derivative)
 
-            first_derivative  = first_derivative.detach().numpy() #+ grad_prior_mu_first.detach().numpy()
-            second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
-            test = first_derivative
-            test1 = second_derivative
-            LL_=LL.detach().numpy()
-            if np.any(np.isnan(first_derivative)) or np.any(np.isnan(second_derivative)) or torch.isnan(LL):
-                print("here")
-                test = np.array([-np.inf, -np.inf])
-                test1 = np.array([[-np.inf, -np.inf],
-                                  [-np.inf, -np.inf]])
-                LL_ = -np.inf
-            # test = np.array([first_derivative])
-            # test1 = np.array([[second_derivative]])
-            
-            
-            
+                    if self.diag_hessian:
+                        for i in range(len(thetas_)):
+                            for j in range(len(thetas_)):
+                                if i != j:
+                                    second_derivative[i][j] = 0
+
+                    second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
+                    grads2 = second_derivative
+
+            LL_=LL.detach().numpy()+self.prior_logpdf(thetas)
+
+            # if np.any(np.isnan(first_derivative)) or np.any(np.isnan(second_derivative)) or torch.isnan(LL):
+            #     print("here")
+            #     test = np.array([-np.inf, -np.inf])
+            #     test1 = np.array([[-np.inf, -np.inf],
+            #                       [-np.inf, -np.inf]])
+            #     LL_ = -np.inf
+           
+
         except Exception as e:
             print(e)
             test = np.array([-np.inf, -np.inf])
@@ -98,30 +103,25 @@ class Target_PF():
                               [-np.inf, -np.inf]])
             LL_ = -np.inf
 
-
-        return(LL_, test, test1)
+        return(LL_, grads, grads2)
 
     def run_particleFilter(self, thetas, rngs):
-        #run particle filter
         mu = thetas[0]
         phi = thetas[1]
+        sigmav = torch.tensor([1.2])
 
-        #torch.manual_seed(rngs)
         T = len(self.y)
         P = 150
-        sigmav = torch.tensor([1.2])
+
         xp = torch.zeros((T, P))
         lw = torch.zeros(P)
         loglikelihood = torch.zeros(T)
 
         xp[0] = torch.full((1,P),  0)[0]+rngs.torchRandn(P)
-
         lw[:] = -torch.log(torch.ones(1,1)*P)
-
-        #####
-        #noise = torch.distributions.Normal(0, 1).rsample(torch.tensor([T, P]))
         noise = rngs.torchNormalrsample(torch.tensor([T, P]))
         resampletot = 0
+
         for t in range(1,T):
             xp[t] =  mu * xp[t-1].clone() + phi * noise[t]
             lognewWeights = lw.clone() + torch.distributions.Normal(xp[t], sigmav).log_prob(torch.tensor([self.y[t]]))
@@ -133,7 +133,6 @@ class Target_PF():
             if(neff<P/2):
                 resampletot = resampletot + 1
                 idx = rngs.torchMultinomial(P, wnorm)
-
                 xp[:] = xp[:, idx]
                 lw[:] = loglikelihood[t]-torch.log(torch.ones(1,1)*P)
 
@@ -215,21 +214,22 @@ class Q(Q_Base):
             return False
 
 # No. samples and iterations
-N = 64
-K = 10
+N = 4
+K = 5
 D = 2
 
-p = Target_PF(observations)
 q0 = Q0()
 
 model = f"lgssm_{N}_explore"
-proposals = ['rw']#, 'first_order', 'rw']
+proposals = ['second_order']#, 'first_order', 'rw']
 l_kernels = ['gauss', 'forwards-proposal']
 # step_sizes = np.linspace(1.0, 1.6, 61)
 # step_sizes = np.linspace(0.03, 0.05, 21)
-step_sizes = np.linspace(0.45, 0.55, 11)
+#step_sizes = np.linspace(0.45, 0.55, 11)
+step_sizes = [0.06]
 #step_sizes = np.linspace(1.0, 1.2, 21)
-seeds = np.arange(0, 5)
+#seeds = np.arange(0, 5)
+seeds=[0]
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     print("Plotting info")
@@ -245,6 +245,8 @@ for proposal in proposals:
             for seed in seeds:
                 if MPI.COMM_WORLD.Get_rank() == 0:
                     print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
+
+                p = Target_PF(observations, proposal, q0.logpdf)
                 q = Q(step_size, proposal)
                 diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
                 diagnose.make_run_folder()
