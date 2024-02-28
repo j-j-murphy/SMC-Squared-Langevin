@@ -60,10 +60,9 @@ class Target_PF():
         self.prior_logpdf = prior_logpdf
     
     """ Define target """
-    def logpdf(self, thetas, rngs, diag_hessian=True):
+    def logpdf(self, thetas, rngs):
         thetas_ = torch.tensor(thetas, requires_grad=True)
 
-        ######
         try:
             LL = self.run_particleFilter(thetas_, rngs)
             grads = np.zeros(len(thetas))
@@ -145,13 +144,13 @@ class Q0(Q0_Base):
         self.gauss_pdf = Normal_PDF(mean=np.zeros(1), cov=np.eye(1))
         self.gamma_pdf = Gamma_PDF(a=1, scale=1)
         self.uni_1_pdf = Uniform_PDF(loc=-1, scale=2)
-        self.uni_2_pdf = Uniform_PDF(loc=0, scale=5)
+        self.uni_2_pdf = Uniform_PDF(loc=0, scale=10)
 
     def logpdf(self, x):
-        return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1])
+        return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1]) +self.uni_2_pdf.logpdf(x[2])
 
     def rvs(self, size, rngs):
-        return np.array([rngs.randomUniform(-1, 1)[0], rngs.randomUniform(0, 5)[0]])
+        return np.array([rngs.randomUniform(-1, 1)[0], rngs.randomUniform(0, 10)[0], rngs.randomUniform(0, 10)[0]])
 
 
 class Q(Q_Base):
@@ -216,7 +215,7 @@ class Q(Q_Base):
 # No. samples and iterations
 N = 4
 K = 5
-D = 2
+D = 3
 
 q0 = Q0()
 
