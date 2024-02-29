@@ -79,6 +79,7 @@ class Target_PF():
             if self.prop == 'first_order' or self.prop == 'second_order':
                 first_derivative = grad(LL, thetas_, create_graph=True)[0]
                 grads = first_derivative.detach().numpy()#+ grad_prior_mu_first.detach().numpy()
+                grads[np.isnan(grads)] = -np.inf
             
                 if self.prop == 'second_order':
                     second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
@@ -92,6 +93,8 @@ class Target_PF():
 
                     second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
                     grads2 = second_derivative
+                    grads2[np.isnan(grads2)] = -np.inf
+
 
             LL_=LL.detach().numpy()+self.prior_logpdf(thetas)
 
@@ -114,7 +117,7 @@ class Target_PF():
     def run_particleFilter(self, thetas, rngs):
         mu = thetas[0]
         phi = thetas[1]
-        sigmav = torch.tensor([1.2])
+        sigmav = thetas[2]
 
         T = len(self.y)
         P = 150
@@ -151,7 +154,7 @@ class Q0(Q0_Base):
         self.gauss_pdf = Normal_PDF(mean=np.zeros(1), cov=np.eye(1))
         self.gamma_pdf = Gamma_PDF(a=1, scale=1)
         self.uni_1_pdf = Uniform_PDF(loc=-1, scale=2)
-        self.uni_2_pdf = Uniform_PDF(loc=0, scale=10)
+        self.uni_2_pdf = Uniform_PDF(loc=0, scale=5)
 
     def logpdf(self, x):
         return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1]) +self.uni_2_pdf.logpdf(x[2])
@@ -220,8 +223,8 @@ class Q(Q_Base):
             return False
 
 # No. samples and iterations
-N = 4
-K = 5
+N = 32
+K = 10
 D = 3
 
 q0 = Q0()

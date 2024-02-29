@@ -12,9 +12,9 @@
 
 # Request the partition
 #SBATCH -p nodes,bighyp
-#SBATCH --ntasks=32
-#SBATCH --ntasks-per-node=32
-#SBATCH -J lgssm_64_rw
+#SBATCH --ntasks=16
+#SBATCH --ntasks-per-node=16
+#SBATCH -J lgssm_32_3d_rw
 
 #SBATCH -c 1
 # This asks for 10 minutes of time.
@@ -84,7 +84,7 @@ echo "Running parallel job:"
 # If you use all of the slots specified in the -pe line above, you do not need
 # to specify how many MPI processes to use - that is the default
 # the ret flag is the return code, so you can spot easily if your code failed.
-mpiexec -n $SLURM_NTASKS python lgssm_gradients.py
+mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'rw' -start 0.3 -num 9 -stride 0.025
 
 ret=$?
 

@@ -6,20 +6,25 @@ import itertools
 
 # Base directory and model components setup
 base_dir = 'outputs'
-models = ["lgssm_16_new_hess"]#, "lgssm_16_new_hess
+models = ["lgssm_16_3d"]#, "lgssm_16_new_hess
 l_kernels = ["gauss", "forwards-proposal"]#, "gauss"]
-proposals = ["first_order"]
+proposals = ["rw"]
 #step_sizes = [str(round(i, 3)) for i in np.linspace(1.0, 1.8, 9)]
 # step_sizes = [str(round(i, 3)) for i in np.linspace(0.1, 1.5, 57)]
-step_sizes = [str(round(i, 3)) for i in np.linspace(0.01, 0.1, 10)]
+start = 0.3
+num_steps = 8
+stride = 0.025
+step_sizes = [str(round(i, 3)) for i in start + np.arange(0, num_steps) * stride]
+print(step_sizes)
 #step_sizes = ["0.03"]
 
-seeds = [f'seed_{i}' for i in range(10)]
+seeds = [f'seed_{i}' for i in range(3)]
 
 # Define true parameter values for RMSE calculation and plotting
 true_values = {
     'mean_rc_x_0': 0.75,
     'mean_rc_x_1': 1.2,
+    'mean_rc_x_2': 1.2,
 }
 
 # Function to compute average runtime across seed directories
@@ -196,18 +201,18 @@ def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, 
                 plot_ess(l_kernel_dir, proposals)
                 plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_0', true_values)
                 plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_1', true_values)
+                plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_2', true_values)
         
         # save rmse and remember to sort
         compare_rmses(model_dir, rmses)
 
-# process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values)
+process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values)
 
-#paths to proposal dir
-#fpath to combined
-output_path = 'outputs/test.png'
-comparison_paths = ['outputs/lgssm_16_new_hess/0.06/forwards-proposal/first_order', 
-                    'outputs/lgssm_16_diag_hess/0.4/gauss/rw']
-plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
-output_path = 'outputs/test2.png'
 
-plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '3', true_values)
+# output_path = 'outputs/test.png'
+# comparison_paths = ['outputs/lgssm_16_new_hess/0.06/forwards-proposal/first_order', 
+#                     'outputs/lgssm_16_diag_hess/0.4/gauss/rw']
+# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
+# output_path = 'outputs/test2.png'
+
+# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '3', true_values)
