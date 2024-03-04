@@ -37,21 +37,21 @@ def generateData(theta, noObservations, initialState):
     phi = theta[1]
     sigmav = theta[2]
 
-    state = np.zeros(noObservations + 1)
-    observation = np.zeros(noObservations)
+    x_t = torch.zeros(1024)
+    y_t = torch.zeros(1024)
     state[0] = initialState
 
-    for t in range(1, noObservations):
-        state[t] = torch.distributions.Normal(mu * state[t-1], phi).sample() # mu * state[t - 1] + phi * np.random.randn()
-        observation[t] = torch.distributions.Normal(state[t], sigmav).sample()
+    for c in range(1, 1024):
+        x_t[c] = mu + phi * (x_t[c-1] - mu) + sigmav + torch.randn(1)
+        y_t[c] = torch.distributions.Normal(0, torch.exp(x_t[c]/2)).sample()
 
     return(state, observation)
 
 parameters = np.zeros(3)    # theta = (phi, sigmav, sigmae)
-parameters[0] = 0.75
-parameters[1] = 1.2
-parameters[2] = 1.2
-noObservations = 500
+parameters[0] = 0.5
+parameters[1] = 0.9
+parameters[2] = 0.2
+noObservations = 1024
 initialState = 0 
 
 state, observations = generateData(parameters, noObservations, initialState)
@@ -122,30 +122,36 @@ class Target_PF():
         T = len(self.y)
         P = 150
 
-        xp = torch.zeros((T, P))
+        xp = torch.zeros(P)
         lw = torch.zeros(P)
+        lnorm = torch.zeros(P)
+        proposalmean = torch.zeros(P)
+        xp_new = torch.zeros(P)
+        XtGivenXtMinus1Theta = torch.zeros(P)
+        YtGivenXt = torch.zeros(P)
+        proposalpdf = torch.zeros(P)
         loglikelihood = torch.zeros(T)
 
-        xp[0] = torch.full((1,P),  0)[0]+rngs.torchRandn(P)
+        xp[:] = torch.full((1,P),  0.001)[0]+torch.randn(P)
         lw[:] = -torch.log(torch.ones(1,1)*P)
         noise = rngs.torchNormalrsample(torch.tensor([T, P]))
         resampletot = 0
 
         for t in range(1,T):
-            xp[t] =  mu * xp[t-1].clone() + phi * noise[t]
-            lognewWeights = lw.clone() + torch.distributions.Normal(xp[t], sigmav).log_prob(torch.tensor([self.y[t]]))
+            xp_new = mu + phi * (xp.clone() - mu) + sigmav * noise[t]
+            lognewWeights = lw.clone() + torch.distributions.Normal(0, torch.exp(xp_new.clone()/2)).log_prob(y[t-1])
             lw = lognewWeights.clone()
             loglikelihood[t] = torch.logsumexp(lw.clone(),dim=0)
             wnorm = torch.exp(lw-loglikelihood[t]) #normalised weights (on a linear scale)
             neff = 1./torch.sum(wnorm*wnorm)
-
+            
             if(neff<P/2):
                 resampletot = resampletot + 1
                 idx = rngs.torchMultinomial(P, wnorm)
-                xp[:] = xp[:, idx]
+                xp= xp_new[idx]
                 lw[:] = loglikelihood[t]-torch.log(torch.ones(1,1)*P)
 
-        return(loglikelihood[T-1])
+        return(loglikelihood[T-2])
 
 class Q0(Q0_Base):
     """ Define initial proposal """
@@ -229,7 +235,7 @@ D = 3
 
 q0 = Q0()
 
-model = f"lgssm_{N}_3d"
+model = f"svm_{N}_3d"
 proposals = [args.proposal]#, 'first_order', 'rw']
 l_kernels = ['gauss', 'forwards-proposal']
 # step_sizes = np.linspace(1.0, 1.6, 61)

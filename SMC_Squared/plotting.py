@@ -6,14 +6,14 @@ import itertools
 
 # Base directory and model components setup
 base_dir = 'outputs'
-models = ["lgssm_16_3d"]#, "lgssm_16_new_hess
+models = ["lgssm_32_3d"]#, "lgssm_16_new_hess
 l_kernels = ["gauss", "forwards-proposal"]#, "gauss"]
-proposals = ["rw"]
+proposals = ["second_order"]
 #step_sizes = [str(round(i, 3)) for i in np.linspace(1.0, 1.8, 9)]
 # step_sizes = [str(round(i, 3)) for i in np.linspace(0.1, 1.5, 57)]
-start = 0.3
-num_steps = 8
-stride = 0.025
+start = 1.0
+num_steps = 9
+stride = 0.1
 step_sizes = [str(round(i, 3)) for i in start + np.arange(0, num_steps) * stride]
 print(step_sizes)
 #step_sizes = ["0.03"]
@@ -48,9 +48,7 @@ def compute_average_non_var(seed_dirs):
         non_var_file = os.path.join(seed_dir, 'non_var_output.csv')
         df = pd.read_csv(non_var_file, index_col=0)
         dfs.append(df)
-    print(df.shape)
     combined_df = pd.concat(dfs, axis=1)
-    print(combined_df.shape)
     mean_df = combined_df.groupby(level=0, axis=1).mean()
     mean_df.to_csv(fpath)
 
@@ -189,6 +187,7 @@ def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, 
                 for proposal in proposals:
                     paths = []
                     for seed in seeds:
+                        print(os.path.join(base_dir, model, step_size, l_kernel, proposal, seed))
                         paths.append(os.path.join(base_dir, model, step_size, l_kernel, proposal, seed))
                     runtime_path = compute_average_runtime(paths)
                     avg_non_var_path = compute_average_non_var(paths)
@@ -206,13 +205,15 @@ def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, 
         # save rmse and remember to sort
         compare_rmses(model_dir, rmses)
 
-process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values)
+# process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values)
 
 
-# output_path = 'outputs/test.png'
-# comparison_paths = ['outputs/lgssm_16_new_hess/0.06/forwards-proposal/first_order', 
-#                     'outputs/lgssm_16_diag_hess/0.4/gauss/rw']
-# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
-# output_path = 'outputs/test2.png'
+output_path = 'outputs/test.png'
+comparison_paths = ['outputs/lgssm_32_3d/0.35/gauss/rw',
+                    'outputs/lgssm_32_3d/0.05/gauss/first_order']
+plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
+output_path = 'outputs/test2.png'
 
-# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '3', true_values)
+plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '4', true_values)
+output_path = 'outputs/test3.png'
+plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_2', '8', true_values)
