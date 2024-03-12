@@ -7,18 +7,18 @@
 
 # Define a standard output file. When the job is running, %u will be replaced by user name,
 # %N will be replaced by the name of the node that runs the batch script, and %j will be replaced by job id number.
-#SBATCH -o logs/%x.out
+#SBATCH -o logs/%j.out
 #####SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p nodes,bighyp
-#SBATCH --ntasks=16
-#SBATCH --ntasks-per-node=16
-#SBATCH -J lgssm_32_3d_2nd
+#SBATCH -p nodes,bighyp,gpudacdt,gpudacdtbig
+#SBATCH --ntasks=32
+#SBATCH --ntasks-per-node=32
+#SBATCH -J not_flepi
 
 #SBATCH -c 1
 # This asks for 10 minutes of time.
-#SBATCH -t 24:00:00
+#SBATCH -t 48:00:00
 # Specify memory per core
 ##SBATCH --mem-per-cpu=8000M
 # Insert your own username to get e-mail notifications
@@ -28,6 +28,8 @@
 #
 # Edit to match your own executable and stdin (/dev/null if no stdin)
 # Note the assumption about where these reside in your home directory! 
+
+export OMP_NUM_THREADS=$SLURM_NTASKS
 
 # Load relevant modules
 module load apps/anaconda3/5.2.0
@@ -84,7 +86,8 @@ echo "Running parallel job:"
 # If you use all of the slots specified in the -pe line above, you do not need
 # to specify how many MPI processes to use - that is the default
 # the ret flag is the return code, so you can spot easily if your code failed.
-mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'second_order' -start 1.0 -num 9 -stride 0.1
+mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'rw' 'first_order' 'second_order' -start 0.2 0.02 0.9 -num 30 14 8 -stride 0.025 0.005 0.1
+# python plot_ll_lgssm.py
 
 ret=$?
 

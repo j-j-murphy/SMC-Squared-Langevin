@@ -1,4 +1,5 @@
 import numpy as np
+import csv
 import sys
 sys.path.append('..')  # noqa
 from numpy.random import randn, choice
@@ -24,12 +25,7 @@ from SMCsq_BASE import SMC
 from SMC_TEMPLATES import Target_Base, Q0_Base, Q_Base
 from SMC_DIAGNOSTICS import smc_no_diagnostics, smc_diagnostics_final_output_only, smc_diagnostics
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-p', '--proposal', type=str, default='rw')
-parser.add_argument('-start', '--start_step_size', type=float, default=0.1)
-parser.add_argument('-num', '--num_steps', type=int, default=10)
-parser.add_argument('-stride', '--step_size_stride', type=float, default=0.1)
-args = parser.parse_args()
+from RNG import RNG
 
 torch.manual_seed(42)
 def generateData(theta, noObservations, initialState):
@@ -45,19 +41,16 @@ def generateData(theta, noObservations, initialState):
         x_t[c] = mu + phi * (x_t[c-1] - mu) + sigmav + torch.randn(1)
         y_t[c] = torch.distributions.Normal(0, torch.exp(x_t[c]/2)).sample()
 
-    return(state, observation)
+    return(x_t, y_t)
 
 parameters = np.zeros(3)    # theta = (phi, sigmav, sigmae)
 parameters[0] = 0.5
 parameters[1] = 0.9
 parameters[2] = 0.2
-noObservations = 1024
+noObservations = 128
 initialState = 0 
 
 state, observations = generateData(parameters, noObservations, initialState)
-
-plt.plot(observations)
-
 
 class Target_PF():
     
@@ -120,7 +113,7 @@ class Target_PF():
         sigmav = thetas[2]
 
         T = len(self.y)
-        P = 150
+        P = 5012
 
         xp = torch.zeros(P)
         lw = torch.zeros(P)
@@ -153,117 +146,57 @@ class Target_PF():
 
         return(loglikelihood[T-2])
 
-class Q0(Q0_Base):
-    """ Define initial proposal """
 
-    def __init__(self):
-        self.gauss_pdf = Normal_PDF(mean=np.zeros(1), cov=np.eye(1))
-        self.gamma_pdf = Gamma_PDF(a=1, scale=1)
-        self.uni_1_pdf = Uniform_PDF(loc=-1, scale=2)
-        self.uni_2_pdf = Uniform_PDF(loc=0, scale=5)
+plt.rcParams['axes.grid'] = True
+plt.rcParams["mathtext.fontset"] = 'cm'
+plt.rcParams['hatch.linewidth'] = 1.0
+plt.rcParams["legend.frameon"] = 'True'
+plt.rcParams["legend.fancybox"] = 'True'
 
-    def logpdf(self, x):
-        return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1]) +self.uni_2_pdf.logpdf(x[2])
+fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(5,5),  constrained_layout=True)
+fig.supylabel('loglikelihood', size=16)
+axs[0].set_ylabel("$E[\mu]$")
+axs[1].set_ylabel("$E[\phi]$")
+axs[2].set_ylabel("E$[\sigma_v]$")
 
-    def rvs(self, size, rngs):
-        return np.array([rngs.randomUniform(-1, 1)[0], rngs.randomUniform(0, 5)[0], rngs.randomUniform(0, 5)[0]])
+mus = np.linspace(0.45, 0.55, 21)
+phis = np.linspace(0.85, 0.95, 21)
+sigmavs = np.linspace(0.15, 0.25, 21)
+thetas = {"mu": mus, "phi": phis, "sigmav": sigmavs}
 
 
-class Q(Q_Base):
-    """ Define general proposal """
-    def __init__(self, step_size, prop):
-        self.step_size = step_size
-        self.prop = prop
+LL_all = []
+  
 
-    def pdf(self, x, x_cond):
-        return (2 * np.pi)**-0.5 * np.exp(-0.5 * (x - x_cond).T @ (x - x_cond))
 
-    def logpdf(self, x, x_cond, v, grads_1):        
-        if self.prop == 'first_order':
-            logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(v)
-        
-        if self.prop == 'second_order':
-            grads_1 = -grads_1
+p = Target_PF(observations, 0, 0)
+rng = RNG(0)
+for k in range(len(thetas)):
+    ll = []
+    thetas_list = list(thetas.keys())
 
-            if self.isPSD(grads_1):
-                cov = np.linalg.pinv(grads_1)#.flatten()
-                cov_1 = self.step_size**2 * cov
-                logpdf = Normal_PDF(mean=x_cond, cov=cov_1).logpdf(v)
-            else:
-                logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(v)
-            
-        if self.prop == 'rw':
-            logpdf = Normal_PDF(mean=x_cond, cov=self.step_size**2 * np.eye(len(x_cond))).logpdf(x)
-        
-        return logpdf
-    
+    if thetas_list[k] == "mu":
+        for x in thetas[thetas_list[k]]:
+            ll.append(p.run_particleFilter(np.array([x, 0.9, 0.2]), rng))
 
-    def rvs(self, x_cond, rngs, grads, grads_1):
-        if self.prop == 'first_order':
-            v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
-            x_new = x_cond +0.5 * self.step_size**2 * grads + v
+    if thetas_list[k] == "phi":
+        for x in thetas[thetas_list[k]]:
+            ll.append(p.run_particleFilter(np.array([0.5, x, 0.2]), rng)) 
 
-        elif self.prop == 'second_order':
-            grads_1 = -grads_1
+    if thetas_list[k] == "sigmav":
+        for x in thetas[thetas_list[k]]:
+            ll.append(p.run_particleFilter(np.array([0.5, 0.9, x]), rng))
 
-            if self.isPSD(grads_1):
-                cov = np.linalg.pinv(grads_1)#.flatten()
-                cov_1 = self.step_size**2 * cov
-                v = rngs.randomMVNormal(np.zeros(len(x_cond)), cov_1)
-                x_new = x_cond + 0.5 * self.step_size**2 * np.dot(grads, cov) + v
+    axs[k].plot(thetas[thetas_list[k]], ll, color="b")
+    axs[k].set_xlim([thetas[thetas_list[k]][0], thetas[thetas_list[k]][-1]])
+    LL_all.append(ll)
 
-            else:
-                v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
-                x_new = x_cond + 0.5 * self.step_size**2 * grads + v
+plt.savefig("outputs/svm_ll.png")
 
-        elif self.prop == 'rw':
-            v = rngs.randomMVNormal(np.zeros(len(x_cond)), self.step_size**2 * np.eye(len(x_cond)))
-            x_new = x_cond + v
+with open('svm_ll.csv', 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerows(LL_all)
 
-        return x_new, v
-    
-    def isPSD(self, x):
-        try:
-            return np.all(np.linalg.eigvals(x) > 0)
-        except:
-            return False
-
-# No. samples and iterations
-N = 32
-K = 10
-D = 3
-
-q0 = Q0()
-
-model = f"svm_{N}_3d"
-proposals = [args.proposal]#, 'first_order', 'rw']
-l_kernels = ['gauss', 'forwards-proposal']
-# step_sizes = np.linspace(1.0, 1.6, 61)
-# step_sizes = np.linspace(0.03, 0.05, 21)
-#step_sizes = np.linspace(0.45, 0.55, 11)
-step_sizes = args.start_step_size + np.arange(0, args.num_steps) * args.step_size_stride
-#step_sizes = np.linspace(1.0, 1.2, 21)
-#seeds = np.arange(0, 5)
-seeds = np.arange(0, 3)
-
-if MPI.COMM_WORLD.Get_rank() == 0:
-    print("Plotting info")
-    print(f"models: {model}")
-    print(f"proposals: {proposals}")
-    print(f"l_kernels: {l_kernels}")
-    print(f"step_sizes: {step_sizes}")
-    print(f"seeds: {seeds}")
-
-for proposal in proposals:
-    for l_kernel in l_kernels:
-        for step_size in step_sizes:
-            for seed in seeds:
-                if MPI.COMM_WORLD.Get_rank() == 0:
-                    print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
-
-                p = Target_PF(observations, proposal, q0.logpdf)
-                q = Q(step_size, proposal)
-                diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
-                diagnose.make_run_folder()
-                smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
-                smc.generate_samples()
+with open('svm_ll.csv', 'r') as read_obj: 
+    csv_reader = csv.reader(read_obj) 
+    LL_all = list(csv_reader) 

@@ -6,14 +6,14 @@ import itertools
 
 # Base directory and model components setup
 base_dir = 'outputs'
-models = ["lgssm_32_3d"]#, "lgssm_16_new_hess
-l_kernels = ["gauss", "forwards-proposal"]#, "gauss"]
-proposals = ["second_order"]
+models = ["lgssm_128_10_4096pfp"]#, "lgssm_16_new_hess
+l_kernels = ["gauss"]#, "gauss"]
+proposals = ["rw"]
 #step_sizes = [str(round(i, 3)) for i in np.linspace(1.0, 1.8, 9)]
 # step_sizes = [str(round(i, 3)) for i in np.linspace(0.1, 1.5, 57)]
-start = 1.0
-num_steps = 9
-stride = 0.1
+start = 0.25
+num_steps = 18
+stride = 0.025
 step_sizes = [str(round(i, 3)) for i in start + np.arange(0, num_steps) * stride]
 print(step_sizes)
 #step_sizes = ["0.03"]
@@ -200,7 +200,7 @@ def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, 
                 plot_ess(l_kernel_dir, proposals)
                 plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_0', true_values)
                 plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_1', true_values)
-                plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_2', true_values)
+                #plot_conv_param(l_kernel_dir, proposals, 'mean_rc_x_2', true_values)
         
         # save rmse and remember to sort
         compare_rmses(model_dir, rmses)
@@ -209,10 +209,11 @@ def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, 
 
 
 output_path = 'outputs/test.png'
-comparison_paths = ['outputs/lgssm_32_3d/0.35/gauss/rw',
-                    'outputs/lgssm_32_3d/0.05/gauss/first_order']
+comparison_paths = ['outputs/lgssm_128_10_4096pfp/0.03/gauss/first_order',]
 plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
 output_path = 'outputs/test2.png'
+
+# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '4', true_values)
 
 plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '4', true_values)
 output_path = 'outputs/test3.png'

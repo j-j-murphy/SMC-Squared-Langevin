@@ -20,15 +20,17 @@ from torch.autograd import Variable
 from torch.autograd import grad
 from torch.autograd.functional import hessian
 
+from RNG import RNG
+
 from SMCsq_BASE import SMC
 from SMC_TEMPLATES import Target_Base, Q0_Base, Q_Base
 from SMC_DIAGNOSTICS import smc_no_diagnostics, smc_diagnostics_final_output_only, smc_diagnostics
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-p', '--proposal', type=str, default='rw', nargs = '+')
-parser.add_argument('-start', '--start_step_size', type=float, default=0.1, nargs = '+')
-parser.add_argument('-num', '--num_steps', type=int, default=10, nargs = '+')
-parser.add_argument('-stride', '--step_size_stride', type=float, default=0.1, nargs = '+')
+parser.add_argument('-p', '--proposal', type=str, default='rw')
+parser.add_argument('-start', '--start_step_size', type=float, default=0.1)
+parser.add_argument('-num', '--num_steps', type=int, default=10)
+parser.add_argument('-stride', '--step_size_stride', type=float, default=0.1)
 args = parser.parse_args()
 
 torch.manual_seed(42)
@@ -61,12 +63,11 @@ plt.plot(observations)
 
 class Target_PF():
     
-    def __init__(self, N_x, y, prop, prior_logpdf, diag_hessian=True):
+    def __init__(self, y, prop, prior_logpdf, diag_hessian=True):
         self.y = y
         self.prop = prop
         self.diag_hessian = diag_hessian
         self.prior_logpdf = prior_logpdf
-        self.N_x = N_x
     
     """ Define target """
     def logpdf(self, thetas, rngs):
@@ -118,11 +119,11 @@ class Target_PF():
     def run_particleFilter(self, thetas, rngs):
         mu = thetas[0]
         phi = thetas[1]
-        sigmav = thetas[2]
-        #sigmav = 1.2
+        #sigmav = thetas[2]
+        sigmav = 1.2
 
         T = len(self.y)
-        P = self.N_x
+        P = 150
 
         xp = torch.zeros((T, P))
         lw = torch.zeros(P)
@@ -159,10 +160,10 @@ class Q0(Q0_Base):
         self.uni_2_pdf = Uniform_PDF(loc=0, scale=5)
 
     def logpdf(self, x):
-        return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1]) +self.uni_2_pdf.logpdf(x[2])
+        return self.uni_1_pdf.logpdf(x[0]) + self.uni_2_pdf.logpdf(x[1])# +self.uni_2_pdf.logpdf(x[2])
 
     def rvs(self, size, rngs):
-        return np.array([rngs.randomUniform(-1, 1)[0], rngs.randomUniform(0, 5)[0], rngs.randomUniform(0, 5)[0]])
+        return np.array([rngs.randomUniform(-1, 1)[0], rngs.randomUniform(0, 5)[0]])#, rngs.randomUniform(0, 5)[0]])
 
 
 class Q(Q_Base):
@@ -225,51 +226,75 @@ class Q(Q_Base):
             return False
 
 # No. samples and iterations
-N_x = 8192
-N = 64
+N = 16
 K = 10
-D = 3
+D = 2
 
 q0 = Q0()
 
-model = f"lgssm_N_{N}_K_{K}_Nx_{N_x}_T_{noObservations}"
-proposals = args.proposal#, 'first_order', 'rw']
-l_kernels = ['gauss']
+model = f"lgssm_{N}_2d"
+proposals = [args.proposal]#, 'first_order', 'rw']
+l_kernels = ['gauss', 'forwards-proposal']
 # step_sizes = np.linspace(1.0, 1.6, 61)
 # step_sizes = np.linspace(0.03, 0.05, 21)
 #step_sizes = np.linspace(0.45, 0.55, 11)
-# step_sizes = args.start_step_size + np.arange(0, args.num_steps) * args.step_size_stride
+step_sizes = args.start_step_size + np.arange(0, args.num_steps) * args.step_size_stride
 #step_sizes = np.linspace(1.0, 1.2, 21)
 #seeds = np.arange(0, 5)
-seeds = np.arange(0, 5)
-
-print(args.proposal, args.start_step_size, args.num_steps, args.step_size_stride)
+seeds = np.arange(0, 3)
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     print("Plotting info")
     print(f"models: {model}")
     print(f"proposals: {proposals}")
     print(f"l_kernels: {l_kernels}")
-    print(f"start_step_size: {args.start_step_size}")
-    print(f"num_steps: {args.num_steps}")
-    print(f"step_size_stride: {args.step_size_stride}")
-    #print(f"step_sizes: {step_sizes}")
+    print(f"step_sizes: {step_sizes}")
     print(f"seeds: {seeds}")
 
-for i in range(len(proposals)):
-    #select stepsizes here
-    step_sizes = args.start_step_size[i] + np.arange(0, args.num_steps[i]) * args.step_size_stride[i]
-    print(step_sizes)
-    print(step_sizes)
-    for l_kernel in l_kernels:
-        for step_size in step_sizes:
-            for seed in seeds:
-                if MPI.COMM_WORLD.Get_rank() == 0:
-                    print(f"Running {proposals[i]} with {l_kernel} kernel and step size {step_size} and seed {seed}")
+# for proposal in proposals:
+#     for l_kernel in l_kernels:
+#         for step_size in step_sizes:
+#             for seed in seeds:
+#                 if MPI.COMM_WORLD.Get_rank() == 0:
+#                     print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
 
-                p = Target_PF(N_x, observations, proposals[i], q0.logpdf)
-                q = Q(step_size, proposals[i])
-                diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposals[i], l_kernel=l_kernel, step_size=step_size, seed=seed)
-                diagnose.make_run_folder()
-                smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
-                smc.generate_samples()
+#                 p = Target_PF(observations, proposal, q0.logpdf)
+#                 q = Q(step_size, proposal)
+#                 diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
+#                 diagnose.make_run_folder()
+#                 smc = SMC(N, D, p, q0, K, proposal=q, optL=l_kernel, seed=seed, rc_scheme='ESS_Recycling', verbose=True, diagnose=diagnose)
+#                 smc.generate_samples()
+
+target = Target_PF(observations, 'second_order', q0.logpdf)
+thetas = np.array([0.75, 1.2])
+
+thetas_ = torch.tensor(thetas, requires_grad=True)
+
+rngs = RNG(42)
+LL = target.run_particleFilter(thetas_, rngs)
+grads = np.zeros(len(thetas))
+grads2 = np.zeros((len(thetas), len(thetas)))
+diag_hessian = True
+
+if target.prop == 'first_order' or target.prop == 'second_order':
+    first_derivative = grad(LL, thetas_, create_graph=True)[0]
+    print(first_derivative)
+    grads = first_derivative.detach().numpy()#+ grad_prior_mu_first.detach().numpy()
+    grads[np.isnan(grads)] = -np.inf
+
+    if target.prop == 'second_order':
+        second_derivative = [torch.autograd.grad(first_derivative[i], thetas_, create_graph=True)[0].detach().numpy() for i in range(len(thetas_))]
+        print(second_derivative)
+        theta0 = torch.autograd.grad(first_derivative[0], thetas_[0], create_graph=True)[0].detach().numpy()
+        print(theta0)
+        second_derivative = np.stack(second_derivative)
+        if diag_hessian:
+            for i in range(len(thetas_)):
+                for j in range(len(thetas_)):
+                    if i != j:
+                        second_derivative[i][j] = 0
+        second_derivative = second_derivative #+ grad_prior_mu_second.detach().numpy()
+        grads2 = second_derivative
+        grads2[np.isnan(grads2)] = -np.inf
+
+
