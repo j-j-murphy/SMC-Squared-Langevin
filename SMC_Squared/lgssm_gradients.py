@@ -23,7 +23,8 @@ from torch.autograd.functional import hessian
 from SMCsq_BASE import SMC
 from SMC_TEMPLATES import Target_Base, Q0_Base, Q_Base
 from SMC_DIAGNOSTICS import smc_no_diagnostics, smc_diagnostics_final_output_only, smc_diagnostics
-
+import os
+os.makedirs('output/zzz_test', exist_ok=True)
 parser = argparse.ArgumentParser()
 parser.add_argument('-p', '--proposal', type=str, default='rw', nargs = '+')
 parser.add_argument('-start', '--start_step_size', type=float, default=0.1, nargs = '+')
@@ -243,9 +244,8 @@ l_kernels = ['gauss']
 #seeds = np.arange(0, 5)
 seeds = np.arange(0, 5)
 
-print(args.proposal, args.start_step_size, args.num_steps, args.step_size_stride)
-
 if MPI.COMM_WORLD.Get_rank() == 0:
+    print("ahhhhhhhhhhhhhhhhhh")
     print("Plotting info")
     print(f"models: {model}")
     print(f"proposals: {proposals}")
@@ -259,7 +259,6 @@ if MPI.COMM_WORLD.Get_rank() == 0:
 for i in range(len(proposals)):
     #select stepsizes here
     step_sizes = args.start_step_size[i] + np.arange(0, args.num_steps[i]) * args.step_size_stride[i]
-    print(step_sizes)
     print(step_sizes)
     for l_kernel in l_kernels:
         for step_size in step_sizes:
