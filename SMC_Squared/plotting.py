@@ -4,29 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import itertools
 
-# Base directory and model components setup
-base_dir = 'outputs'
-models = ["lgssm_128_10_4096pfp"]#, "lgssm_16_new_hess
-l_kernels = ["gauss"]#, "gauss"]
-proposals = ["rw"]
-#step_sizes = [str(round(i, 3)) for i in np.linspace(1.0, 1.8, 9)]
-# step_sizes = [str(round(i, 3)) for i in np.linspace(0.1, 1.5, 57)]
-start = 0.25
-num_steps = 18
-stride = 0.025
-step_sizes = [str(round(i, 3)) for i in start + np.arange(0, num_steps) * stride]
-print(step_sizes)
-#step_sizes = ["0.03"]
-
-seeds = [f'seed_{i}' for i in range(3)]
-
-# Define true parameter values for RMSE calculation and plotting
-true_values = {
-    'mean_rc_x_0': 0.75,
-    'mean_rc_x_1': 1.2,
-    'mean_rc_x_2': 1.2,
-}
-
 # Function to compute average runtime across seed directories
 def compute_average_runtime(seed_dirs):
     fpath = os.path.join(seed_dirs[0].rsplit('/', 1)[0], 'average_runtime.csv')
@@ -172,7 +149,6 @@ def compare_rmses(model_dir, rmses):
     # rmses_df = pd.DataFrame(rmses)
     # rmses_df.to_csv(fpath, index=False)
 
-
 print("here")
 # Main function to process model structure and apply computations and plotting
 def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values):
@@ -205,16 +181,41 @@ def process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, 
         # save rmse and remember to sort
         compare_rmses(model_dir, rmses)
 
-# process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values)
+# Base directory and model components setup
+base_dir = 'outputs'
+models = ["lgssm_N_64_K_10_Nx_8192_T_500"]#, "lgssm_16_new_hess
+l_kernels = ["gauss"]#, "gauss"]
+seeds = [f'seed_{i}' for i in range(5)]
+#step_sizes = [str(round(i, 3)) for i in np.linspace(1.0, 1.8, 9)]
+# step_sizes = [str(round(i, 3)) for i in np.linspace(0.1, 1.5, 57)]
+
+proposals = ["rw"]
+start = [0.2]
+num_steps = [20]
+stride = [0.025]
+#step_sizes = ["0.03"]
+
+# Define true parameter values for RMSE calculation and plotting
+true_values = {
+    'mean_rc_x_0': 0.75,
+    'mean_rc_x_1': 1.2,
+    'mean_rc_x_2': 1.2,
+}
 
 
-output_path = 'outputs/test.png'
-comparison_paths = ['outputs/lgssm_128_10_4096pfp/0.03/gauss/first_order',]
-plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
-output_path = 'outputs/test2.png'
+for i in range(len(start)):
+    step_sizes = [str(round(i, 3)) for i in start[i] + np.arange(0, num_steps[i]) * stride[i]]
+    print(step_sizes)
+    process_model_structure(base_dir, models, l_kernels, proposals, step_sizes, seeds, true_values)
+
+
+# output_path = 'outputs/test.png'
+# comparison_paths = ['outputs/lgssm_128_10_4096pfp/0.03/gauss/first_order',]
+# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_0', '0', true_values)
+# output_path = 'outputs/test2.png'
+
+# # plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '4', true_values)
 
 # plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '4', true_values)
-
-plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_1', '4', true_values)
-output_path = 'outputs/test3.png'
-plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_2', '8', true_values)
+# output_path = 'outputs/test3.png'
+# plot_conv_error_bars(comparison_paths, output_path, 'mean_rc_x_2', '8', true_values)

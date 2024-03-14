@@ -11,8 +11,8 @@
 #####SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p nodes,bighyp,gpudacdt,gpudacdtbig
-#SBATCH --ntasks=32
+#SBATCH -p phi
+#SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=32
 #SBATCH -J not_flepi
 
@@ -89,8 +89,16 @@ echo "Running parallel job:"
 # If you use all of the slots specified in the -pe line above, you do not need
 # to specify how many MPI processes to use - that is the default
 # the ret flag is the return code, so you can spot easily if your code failed.
-# mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'rw' 'first_order' 'second_order' -start 0.2 0.02 0.9 -num 30 14 8 -stride 0.025 0.005 0.1
-mpiexec python lgssm_gradients.py -p 'rw' 'first_order' 'second_order' -start 0.2 0.02 0.9 -num 30 14 8 -stride 0.025 0.005 0.1
+# mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'rw' 'first_order' 'second_order' -start 0.3 0.03 0.9 -num 30 14 8 -stride 0.025 0.005 0.1
+
+
+#running on phi
+mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'second_order' -start 1.2 -num 6 -stride 0.1
+# mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'first_order' -start 0.03 -num 10 -stride 0.005
+
+#elsewhere
+# mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'first_order' 'second_order' -start 0.0325 1.25 -num 10 6 -stride 0.005 0.1
+
 # python plot_ll_lgssm.py
 
 ret=$?
