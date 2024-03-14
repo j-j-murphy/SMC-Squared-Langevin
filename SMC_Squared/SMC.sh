@@ -11,10 +11,10 @@
 #####SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p nodes,bighyp
-#SBATCH --ntasks=16
-#SBATCH --ntasks-per-node=16
-#SBATCH -J lgssm_32_3d_2nd
+#SBATCH -p phi
+#SBATCH --ntasks=64
+#SBATCH --ntasks-per-node=32
+#SBATCH -J not_flepi
 
 #SBATCH -c 1
 # This asks for 10 minutes of time.
@@ -31,7 +31,7 @@
 
 # Load relevant modules
 module load apps/anaconda3/5.2.0
-module load mpi/openmpi/1.10.7/gcc-5.5.0
+module load mpi/openmpi/4.1.1/gcc-9.3.0
 source activate mpi4py_env
 
 # Activate your own virtual environment in which mpipy is installed
@@ -41,6 +41,11 @@ source activate mpi4py_env
 #conda activate mpi4py_env (for new version)
 echo "mpiexec=`which mpiexec`"
 echo "mpirun=`which mpirun`"
+
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+
 
 #
 # Should not need to edit below this line
@@ -84,7 +89,7 @@ echo "Running parallel job:"
 # If you use all of the slots specified in the -pe line above, you do not need
 # to specify how many MPI processes to use - that is the default
 # the ret flag is the return code, so you can spot easily if your code failed.
-mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'second_order' -start 1.0 -num 9 -stride 0.1
+mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'second_order' -start 1.2 -num 6 -stride 0.1
 
 ret=$?
 

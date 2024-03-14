@@ -61,11 +61,12 @@ plt.plot(observations)
 
 class Target_PF():
     
-    def __init__(self, y, prop, prior_logpdf, diag_hessian=True):
+    def __init__(self, N_x, y, prop, prior_logpdf, diag_hessian=True):
         self.y = y
         self.prop = prop
         self.diag_hessian = diag_hessian
         self.prior_logpdf = prior_logpdf
+        self.N_x = N_x
     
     """ Define target """
     def logpdf(self, thetas, rngs):
@@ -120,7 +121,7 @@ class Target_PF():
         sigmav = thetas[2]
 
         T = len(self.y)
-        P = 150
+        P = self.N_x
 
         xp = torch.zeros((T, P))
         lw = torch.zeros(P)
@@ -223,22 +224,24 @@ class Q(Q_Base):
             return False
 
 # No. samples and iterations
-N = 32
+N_x = 8192
+N = 64
 K = 10
 D = 3
 
 q0 = Q0()
 
-model = f"lgssm_{N}_3d"
+model = f"lgssm_N_{N}_K_{K}_Nx_{N_x}_T_{noObservations}"
 proposals = [args.proposal]#, 'first_order', 'rw']
-l_kernels = ['gauss', 'forwards-proposal']
+l_kernels = ['gauss']
+N_x = 8192
 # step_sizes = np.linspace(1.0, 1.6, 61)
 # step_sizes = np.linspace(0.03, 0.05, 21)
 #step_sizes = np.linspace(0.45, 0.55, 11)
 step_sizes = args.start_step_size + np.arange(0, args.num_steps) * args.step_size_stride
 #step_sizes = np.linspace(1.0, 1.2, 21)
 #seeds = np.arange(0, 5)
-seeds = np.arange(0, 3)
+seeds = np.arange(0, 5)
 
 if MPI.COMM_WORLD.Get_rank() == 0:
     print("Plotting info")
@@ -255,7 +258,7 @@ for proposal in proposals:
                 if MPI.COMM_WORLD.Get_rank() == 0:
                     print(f"Running {proposal} with {l_kernel} kernel and step size {step_size} and seed {seed}")
 
-                p = Target_PF(observations, proposal, q0.logpdf)
+                p = Target_PF(N_x, observations, proposal, q0.logpdf)
                 q = Q(step_size, proposal)
                 diagnose = smc_diagnostics_final_output_only(model=model, proposal=proposal, l_kernel=l_kernel, step_size=step_size, seed=seed)
                 diagnose.make_run_folder()
