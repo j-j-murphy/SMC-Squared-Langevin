@@ -7,13 +7,13 @@
 
 # Define a standard output file. When the job is running, %u will be replaced by user name,
 # %N will be replaced by the name of the node that runs the batch script, and %j will be replaced by job id number.
-#SBATCH -o logs/%x.out
+#SBATCH -o logs/%j.out
 #####SBATCH --exclusive
 
 # Request the partition
-#SBATCH -p phi
-#SBATCH --ntasks=64
-#SBATCH --ntasks-per-node=32
+#SBATCH -p nodes,bighyp,gpudacdtbig,gpudacdt,himem
+#SBATCH --ntasks=16
+#SBATCH --ntasks-per-node=16
 #SBATCH -J not_flepi
 
 #SBATCH -c 1
@@ -89,7 +89,7 @@ echo "Running parallel job:"
 # If you use all of the slots specified in the -pe line above, you do not need
 # to specify how many MPI processes to use - that is the default
 # the ret flag is the return code, so you can spot easily if your code failed.
-mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'second_order' -start 1.2 -num 6 -stride 0.1
+mpiexec -n $SLURM_NTASKS python lgssm_gradients.py -p 'first_order' -start 0.03 -num 5 -stride 0.005
 
 ret=$?
 
