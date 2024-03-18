@@ -19,8 +19,10 @@ class smc_no_diagnostics:
 class smc_diagnostics_final_output_only(smc_no_diagnostics):
     def __init__(self, model, proposal, l_kernel, step_size, seed):
         self.now = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-        self.fpath = Path(f"outputs/{model}",f"{proposal}",f"{l_kernel}",f"{step_size}", f"seed_{int(seed)}")
-        self.fpath = Path(f"outputs/{model}", f"{np.round(step_size, 3)}", f"{l_kernel}", f"{proposal}", f"seed_{int(seed)}")
+        # self.fpath = Path(f"outputs/{model}",f"{proposal}",f"{l_kernel}",f"{step_size}", f"seed_{int(seed)}")
+        # self.fpath = Path(f"outputs/{model}", f"{np.round(step_size, 3)}", f"{l_kernel}", f"{proposal}", f"seed_{int(seed)}")
+        self.fpath = Path(f"outputs/{model}", f"{np.round(step_size, 3)}", f"{l_kernel}", f"{proposal}")
+        self.seed = seed
 
 
     def make_run_folder(self):
@@ -32,19 +34,23 @@ class smc_diagnostics_final_output_only(smc_no_diagnostics):
         mean_df = pd.DataFrame(mean, columns = ["mean_x_"+str(i) for i in range(mean.shape[1])])
         mean_rc_df = pd.DataFrame(mean_rc, columns = ["mean_rc_x_"+str(i) for i in range(mean_rc.shape[1])])
         resampling_points = np.pad(resampling_points, (0, len(ess)-len(resampling_points)))
-        non_estim_df = pd.DataFrame({"neff": Neff, "ess":ess, "resampling_points":resampling_points})
-        final_info_df = pd.concat([mean_df, mean_rc_df, non_estim_df], axis=1)
-        final_info_df.to_csv(Path(self.fpath, "non_var_output.csv"))
+        non_estim_df = pd.DataFrame({"neff": Neff, "ess":ess, "resampling_points":resampling_points, "runtime_iterations":runtime_iterations})
+        var = np.reshape(var, (var.shape[0], -1))
+        var_rc = np.reshape(var_rc, (var_rc.shape[0], -1))
+        var_df = pd.DataFrame(var, columns = ["var_x_"+str(i) for i in range(var.shape[1])])
+        var_rc_df = pd.DataFrame(var_rc, columns = ["var_rc_x_"+str(i) for i in range(var_rc.shape[1])])
+
+        final_info_df = pd.concat([mean_df, mean_rc_df, non_estim_df, var_df, var_rc_df], axis=1)
+
+        final_info_df.to_csv(Path(self.fpath, f"seed_{self.seed}.csv"))
 
         if MPI.COMM_WORLD.Get_rank() == 0:
             print(final_info_df)
 
-        var = np.reshape(var, (var.shape[0], -1))
-        var_rc = np.reshape(var_rc, (var_rc.shape[0], -1))
 
-        np.savetxt(Path(self.fpath,"var.csv"), var, delimiter=",")
-        np.savetxt(Path(self.fpath,"var_rc.csv"), var_rc, delimiter=",")
-        np.savetxt(Path(self.fpath,"runtime_iterations.csv"), runtime_iterations, delimiter=",")
+        # np.savetxt(Path(self.fpath,"var.csv"), var, delimiter=",")
+        # np.savetxt(Path(self.fpath,"var_rc.csv"), var_rc, delimiter=",")
+        # np.savetxt(Path(self.fpath,"runtime_iterations.csv"), runtime_iterations, delimiter=",")
 
 class smc_diagnostics(smc_diagnostics_final_output_only):
         
