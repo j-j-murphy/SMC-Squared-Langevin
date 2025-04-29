@@ -23,14 +23,14 @@ seeds = [f"seed_{seed_num}" for seed_num in seed_nums]
 # first_order_ss = np.linspace(0.02, 0.03, 21)
 # rw_ss = np.linspace(0.1, 0.9, 17)
 ### LGSS ###
-rw_ss = [0.1] 
-first_order_ss = [0.1]
-sec_order_ss = [1.15]
+rw_ss = [0.7] 
+first_order_ss = [0.03]
+sec_order_ss = [1.55]
 ###
 # ### SIR ###
-rw_ss = [0.15] 
-first_order_ss = [0.0089]
-sec_order_ss = [2.5]
+rw_ss = [0.55] 
+first_order_ss = [0.008]
+sec_order_ss = [2.05]
 # ###
 sec_order_ss = [str(round(i,2)) for i in sec_order_ss]
 first_order_ss = [str(round(i,4)) for i in first_order_ss]
@@ -290,10 +290,11 @@ def generate_sir_results_table(avg_non_var_paths, base_dir='outputs'):
         mse = mse_df.loc[mse_df['prop_name'] == prop_mse_name, 'avg_rmse_rc'].values[0]
         
         # Format MSE
-        if mse < 0.001:
-            mse_str = f"${mse:.2e}".replace('e-0', ' \\times 10^{-') + '}$'
-        else:
-            mse_str = f"{mse:.3f}"
+        mse_str = f"${mse:.2e}".replace('e-0', ' \\times 10^{-') + '}$'
+        # if mse < 0.001:
+        #     mse_str = f"${mse:.2e}".replace('e-0', ' \\times 10^{-') + '}$'
+        # else:
+        #     mse_str = f"{mse:.3f}"
         
         # Format proposal names
         proposal_name = proposal_name.replace('first_order', 'FO').replace('second_order', 'SO').replace('rw', 'RW')
@@ -344,10 +345,11 @@ def generate_lgssm_results_table(avg_non_var_paths, base_dir='outputs'):
         mse = mse_df.loc[mse_df['prop_name'] == prop_mse_name, 'avg_rmse_rc'].values[0]
         
         # Format MSE
-        if mse < 0.001:
-            mse_str = f"${mse:.1e}".replace('e-0', ' \\times 10^{-') + '}$'
-        else:
-            mse_str = f"{mse:.3f}"
+        mse_str = f"${mse:.3e}".replace('e-0', ' \\times 10^{-') + '}$'
+        # if mse < 0.001:
+        #     mse_str = f"${mse:.1e}".replace('e-0', ' \\times 10^{-') + '}$'
+        # else:
+        #     mse_str = f"{mse:.3f}"
         
         # Format proposal names
         proposal_name = proposal_name.replace('first_order', 'First-order').replace('second_order', 'Second-order').replace('rw', 'RW')

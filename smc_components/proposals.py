@@ -32,7 +32,7 @@ class Q(Q_Base):
                     jac = self.step_size**len(inv_neg_hess)*np.prod(np.diag(inv_neg_hess))
                     logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=inv_neg_hess, allow_singular=True).logpdf(v) * jac
                 except np.linalg.LinAlgError:
-                    print("⚠️ LinAlgError caught — falling back to first-order.")
+                    print(" falling back to first-order.")
                     step_size = self.ss_2nd_1st
                     logpdf = Normal_PDF(mean=np.zeros(len(x)), cov=np.eye(len(x))).logpdf(v)
                 # logpdf = Normal_PDF(mean=x_cond+self.step_size**2/2*np.dot(grads, inv_neg_hess), cov=self.step_size**2 * inv_neg_hess).logpdf(x)
