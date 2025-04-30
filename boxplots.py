@@ -66,7 +66,7 @@ def boxplot_rmse(model):
     else:
         ax.set_title(f'{model.split("_")[0].upper()}')
     ax.set_xlabel('Proposal')
-    ax.set_ylabel('log-RMSE')
+    ax.set_ylabel('RMSE')
     ax.tick_params(axis='x', rotation=45)
     # log scale
     ax.set_yscale('log')

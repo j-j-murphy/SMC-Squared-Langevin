@@ -1,8 +1,7 @@
-matplotlib
-scipy
-autograd
-numpy
-appdirs
-lz4
-importlib_resources
-aiohttp
+autograd==1.6.2
+matplotlib==3.5.1
+mpi4py==3.1.4
+numpy==2.2.5
+pandas==1.4.2
+scipy==1.15.2
+torch==2.1.2
